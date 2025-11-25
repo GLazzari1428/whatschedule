@@ -427,11 +427,28 @@ process.on('SIGINT', () => {
 });
 
 server.listen(PORT, '0.0.0.0', () => {
+  // Get actual network interfaces
+  const os = require('os');
+  const networkInterfaces = os.networkInterfaces();
+  
+  // Find first non-internal IPv4 address
+  let ipAddress = '0.0.0.0';
+  for (const interfaceName in networkInterfaces) {
+    for (const net of networkInterfaces[interfaceName]) {
+      // Skip internal (loopback) and IPv6 addresses
+      if (net.family === 'IPv4' && !net.internal) {
+        ipAddress = net.address;
+        break;
+      }
+    }
+    if (ipAddress !== '0.0.0.0') break;
+  }
+  
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('📱 WhatsApp Message Scheduler');
-  console.log(`🌐 Server: http://0.0.0.0:${PORT}`);
-  console.log(`📂 Data: ${DATA_DIR}`);
-  console.log(`🐳 Docker: ${process.env.PUPPETEER_EXECUTABLE_PATH ? 'Yes' : 'No'}`);
+  console.log('WhatsScheduler');
+  console.log(`Server: http://${ipAddress}:${PORT}`);
+  console.log(`Data: ${DATA_DIR}`);
+  console.log(`Docker: ${process.env.PUPPETEER_EXECUTABLE_PATH ? 'Yes' : 'No'}`);
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
   initializeWhatsAppClient();
 });
