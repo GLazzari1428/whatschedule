@@ -4,13 +4,18 @@ const { Client, LocalAuth } = require('whatsapp-web.js');
 const cron = require('node-cron');
 const QRCode = require('qrcode');
 const Database = require('better-sqlite3');
-const path = require('path');
+const http = require('http');
+const WebSocket = require('ws');
 
 const app = express();
+const server = http.createServer(app);
+const wss = new WebSocket.Server({ server });
+
 const PORT = process.env.PORT || 3000;
 
 // Database setup
 const db = new Database('scheduler.db');
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS scheduled_messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -23,12 +28,31 @@ db.exec(`
   )
 `);
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS favorites (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    chat_id TEXT UNIQUE NOT NULL,
+    name TEXT NOT NULL,
+    is_group BOOLEAN DEFAULT 0,
+    added_at TEXT DEFAULT CURRENT_TIMESTAMP
+  )
+`);
+
 // WhatsApp client setup
 let client = null;
 let qrCodeData = null;
 let isReady = false;
 let chatsCache = null;
 let lastCacheUpdate = null;
+
+// WebSocket broadcast
+function broadcast(data) {
+  wss.clients.forEach(client => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(JSON.stringify(data));
+    }
+  });
+}
 
 function initializeWhatsAppClient() {
   client = new Client({
@@ -49,10 +73,13 @@ function initializeWhatsAppClient() {
   });
 
   client.on('qr', (qr) => {
-    console.log('📱 QR Code received, generating image...');
+    console.log('📱 QR Code received');
     qrCodeData = qr;
     QRCode.toDataURL(qr, (err, url) => {
-      if (!err) qrCodeData = url;
+      if (!err) {
+        qrCodeData = url;
+        broadcast({ type: 'qr', data: url });
+      }
     });
   });
 
@@ -60,13 +87,14 @@ function initializeWhatsAppClient() {
     console.log('✓ WhatsApp Client is ready!');
     isReady = true;
     qrCodeData = null;
+    broadcast({ type: 'ready' });
     
-    // Wait a bit then preload chats
     setTimeout(async () => {
       try {
         console.log('⏳ Preloading chats...');
         await loadChatsCache();
-        console.log(`✓ Successfully loaded ${chatsCache ? chatsCache.length : 0} chats (contacts + groups)`);
+        console.log(`✓ Successfully loaded ${chatsCache ? chatsCache.length : 0} chats`);
+        broadcast({ type: 'contacts', data: chatsCache });
       } catch (error) {
         console.error('✗ Error preloading chats:', error.message);
       }
@@ -74,7 +102,7 @@ function initializeWhatsAppClient() {
   });
 
   client.on('authenticated', () => {
-    console.log('✓ WhatsApp authenticated successfully');
+    console.log('✓ WhatsApp authenticated');
   });
 
   client.on('auth_failure', () => {
@@ -86,66 +114,46 @@ function initializeWhatsAppClient() {
     console.log('⚠ WhatsApp disconnected:', reason);
     isReady = false;
     chatsCache = null;
+    broadcast({ type: 'disconnected' });
   });
 
   client.initialize();
 }
 
-// Load and cache chats
 async function loadChatsCache() {
   try {
     const now = Date.now();
-    // Cache for 30 seconds to avoid hammering WhatsApp
     if (chatsCache && lastCacheUpdate && (now - lastCacheUpdate) < 30000) {
-      console.log('📋 Using cached chats');
       return chatsCache;
     }
     
-    console.log('🔍 Fetching chats from WhatsApp...');
     const allChats = await client.getChats();
-    console.log(`📊 Found ${allChats.length} total chats`);
-    
     const processed = [];
-    let groupCount = 0;
-    let contactCount = 0;
-    let skippedCount = 0;
     
     for (const chat of allChats) {
       try {
         if (chat.isGroup) {
-          // It's a group - use chat properties directly
           processed.push({
             id: chat.id._serialized,
-            name: `📁 ${chat.name || 'Unnamed Group'}`,
+            name: chat.name || 'Unnamed Group',
             number: null,
             isGroup: true
           });
-          groupCount++;
-          console.log(`  ✓ Group: ${chat.name || 'Unnamed'}`);
         } else if (!chat.isMe) {
-          // Regular contact - use chat properties without calling getContact()
           const contactName = chat.name || chat.id.user || 'Unknown';
           processed.push({
             id: chat.id._serialized,
             name: contactName,
-            number: chat.id.user, // phone number
+            number: chat.id.user,
             isGroup: false
           });
-          contactCount++;
-          console.log(`  ✓ Contact: ${contactName}`);
-        } else {
-          skippedCount++;
         }
       } catch (err) {
-        console.error(`  ✗ Error processing chat:`, err.message);
-        skippedCount++;
+        console.error(`Error processing chat:`, err.message);
       }
     }
     
-    console.log(`📈 Processing complete: ${groupCount} groups, ${contactCount} contacts, ${skippedCount} skipped`);
-    
     chatsCache = processed.sort((a, b) => {
-      // Groups first, then by name
       if (a.isGroup && !b.isGroup) return -1;
       if (!a.isGroup && b.isGroup) return 1;
       return (a.name || '').localeCompare(b.name || '');
@@ -155,23 +163,16 @@ async function loadChatsCache() {
     return chatsCache;
   } catch (error) {
     console.error('✗ Error loading chats cache:', error.message);
-    console.error('Stack:', error.stack);
     throw error;
   }
 }
 
-// Calculate realistic typing delay based on message length
-// Average mobile typing: ~3 chars/second, with variation
 function calculateTypingDelay(messageLength) {
-  const baseCharsPerSecond = 3; // Conservative typing speed
-  const variance = 0.5; // Add randomness
-  
+  const baseCharsPerSecond = 3;
+  const variance = 0.5;
   const charsPerSecond = baseCharsPerSecond + (Math.random() * variance * 2 - variance);
-  const baseDelay = (messageLength / charsPerSecond) * 1000; // ms
-  
-  // Add thinking time between messages (1-3 seconds)
+  const baseDelay = (messageLength / charsPerSecond) * 1000;
   const thinkingTime = 1000 + Math.random() * 2000;
-  
   return Math.floor(baseDelay + thinkingTime);
 }
 
@@ -188,56 +189,75 @@ app.get('/api/status', (req, res) => {
   });
 });
 
-// Get contacts and groups
 app.get('/api/contacts', async (req, res) => {
   if (!isReady) {
-    console.log('⚠ API /contacts called but WhatsApp not ready');
     return res.status(503).json({ error: 'WhatsApp client not ready' });
   }
   
   try {
-    console.log('📞 API: Loading contacts for frontend...');
     const chats = await loadChatsCache();
-    console.log(`✓ Returning ${chats ? chats.length : 0} chats to frontend`);
     res.json(chats || []);
   } catch (error) {
-    console.error('✗ API /contacts error:', error.message);
-    res.json([]); // Return empty array on error - user can type number manually
+    res.json([]);
+  }
+});
+
+app.get('/api/favorites', (req, res) => {
+  try {
+    const stmt = db.prepare('SELECT * FROM favorites ORDER BY added_at DESC');
+    const favorites = stmt.all();
+    res.json(favorites);
+  } catch (error) {
+    res.json([]);
+  }
+});
+
+app.post('/api/favorites', (req, res) => {
+  try {
+    const { chatId, name, isGroup } = req.body;
+    const stmt = db.prepare('INSERT OR REPLACE INTO favorites (chat_id, name, is_group) VALUES (?, ?, ?)');
+    stmt.run(chatId, name, isGroup ? 1 : 0);
+    
+    const allFavorites = db.prepare('SELECT * FROM favorites ORDER BY added_at DESC').all();
+    broadcast({ type: 'favorites', data: allFavorites });
+    
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/favorites/:chatId', (req, res) => {
+  try {
+    const stmt = db.prepare('DELETE FROM favorites WHERE chat_id = ?');
+    stmt.run(req.params.chatId);
+    
+    const allFavorites = db.prepare('SELECT * FROM favorites ORDER BY added_at DESC').all();
+    broadcast({ type: 'favorites', data: allFavorites });
+    
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
 app.post('/api/schedule', (req, res) => {
-  const { phoneNumber, message, scheduledTime } = req.body;
+  const { phoneNumber, messages, scheduledTime } = req.body;
   
-  console.log(`📝 Schedule request: ${phoneNumber}, ${message.length} chars, at ${scheduledTime}`);
-  
-  if (!phoneNumber || !message || !scheduledTime) {
-    console.log('✗ Missing required fields');
+  if (!phoneNumber || !messages || messages.length === 0 || !scheduledTime) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
 
   const scheduledDate = new Date(scheduledTime);
   if (scheduledDate <= new Date()) {
-    console.log('✗ Scheduled time is in the past');
     return res.status(400).json({ error: 'Scheduled time must be in the future' });
   }
 
   try {
-    // Split messages by "/" delimiter
-    const messages = message.split('/').map(m => m.trim()).filter(m => m.length > 0);
-    
-    if (messages.length === 0) {
-      console.log('✗ No valid messages after splitting');
-      return res.status(400).json({ error: 'No valid messages found' });
-    }
-
-    console.log(`📨 Splitting into ${messages.length} messages`);
-
     const batchId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
     let cumulativeDelay = 0;
     const insertedIds = [];
 
-    // Create scheduled entry for each message with realistic delays
     messages.forEach((msg, index) => {
       const msgScheduledTime = new Date(scheduledDate.getTime() + cumulativeDelay);
       
@@ -248,9 +268,8 @@ app.post('/api/schedule', (req, res) => {
       insertedIds.push(result.lastInsertRowid);
       
       const delaySeconds = Math.floor(cumulativeDelay / 1000);
-      console.log(`  ${index + 1}. "${msg.substring(0, 30)}..." at +${delaySeconds}s`);
+      console.log(`  ${index + 1}. Message scheduled at +${delaySeconds}s: "${msg.substring(0, 40)}..."`);
       
-      // Calculate delay for next message based on current message length
       if (index < messages.length - 1) {
         cumulativeDelay += calculateTypingDelay(msg.length);
       }
@@ -258,115 +277,117 @@ app.post('/api/schedule', (req, res) => {
     
     console.log(`✓ Scheduled ${messages.length} messages with batch ID: ${batchId}`);
     
+    const allScheduled = db.prepare('SELECT * FROM scheduled_messages WHERE sent = 0 ORDER BY scheduled_time ASC').all();
+    broadcast({ type: 'scheduled', data: allScheduled });
+    
     res.json({
       success: true,
       count: messages.length,
-      ids: insertedIds,
-      message: `${messages.length} message(s) scheduled with realistic delays`
+      ids: insertedIds
     });
   } catch (error) {
-    console.error('✗ Error scheduling messages:', error.message);
+    console.error('✗ Error scheduling:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
 
 app.get('/api/scheduled', (req, res) => {
   try {
-    const stmt = db.prepare(
-      'SELECT * FROM scheduled_messages WHERE sent = 0 ORDER BY scheduled_time ASC'
-    );
+    const stmt = db.prepare('SELECT * FROM scheduled_messages WHERE sent = 0 ORDER BY scheduled_time ASC');
     const messages = stmt.all();
     res.json(messages);
   } catch (error) {
-    console.error('✗ Error fetching scheduled messages:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/scheduled/:id', (req, res) => {
+  try {
+    const { scheduledTime } = req.body;
+    const stmt = db.prepare('UPDATE scheduled_messages SET scheduled_time = ? WHERE id = ? AND sent = 0');
+    const result = stmt.run(scheduledTime, req.params.id);
+    
+    if (result.changes > 0) {
+      const allScheduled = db.prepare('SELECT * FROM scheduled_messages WHERE sent = 0 ORDER BY scheduled_time ASC').all();
+      broadcast({ type: 'scheduled', data: allScheduled });
+      res.json({ success: true });
+    } else {
+      res.status(404).json({ error: 'Message not found' });
+    }
+  } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
 app.delete('/api/scheduled/:id', (req, res) => {
   try {
-    console.log(`🗑 Deleting message ID: ${req.params.id}`);
     const stmt = db.prepare('DELETE FROM scheduled_messages WHERE id = ? AND sent = 0');
     const result = stmt.run(req.params.id);
     
     if (result.changes > 0) {
-      console.log(`✓ Deleted message ${req.params.id}`);
-      res.json({ success: true, message: 'Message deleted' });
+      const allScheduled = db.prepare('SELECT * FROM scheduled_messages WHERE sent = 0 ORDER BY scheduled_time ASC').all();
+      broadcast({ type: 'scheduled', data: allScheduled });
+      res.json({ success: true });
     } else {
-      console.log(`⚠ Message ${req.params.id} not found or already sent`);
       res.status(404).json({ error: 'Message not found' });
     }
   } catch (error) {
-    console.error('✗ Error deleting message:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
 
 app.delete('/api/scheduled/batch/:batchId', (req, res) => {
   try {
-    console.log(`🗑 Deleting batch: ${req.params.batchId}`);
     const stmt = db.prepare('DELETE FROM scheduled_messages WHERE batch_id = ? AND sent = 0');
-    const result = stmt.run(req.params.batchId);
+    stmt.run(req.params.batchId);
     
-    console.log(`✓ Deleted ${result.changes} messages from batch`);
-    res.json({ 
-      success: true, 
-      message: `Deleted ${result.changes} message(s) from batch` 
-    });
+    const allScheduled = db.prepare('SELECT * FROM scheduled_messages WHERE sent = 0 ORDER BY scheduled_time ASC').all();
+    broadcast({ type: 'scheduled', data: allScheduled });
+    
+    res.json({ success: true });
   } catch (error) {
-    console.error('✗ Error deleting batch:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Cron job to check and send scheduled messages every minute
-cron.schedule('* * * * *', async () => {
+// FIXED: Check every 5 seconds for precise timing
+cron.schedule('*/5 * * * * *', async () => {
   if (!isReady) return;
 
   const now = new Date();
-  const stmt = db.prepare(
-    'SELECT * FROM scheduled_messages WHERE sent = 0 AND datetime(scheduled_time) <= datetime(?)'
-  );
+  const stmt = db.prepare('SELECT * FROM scheduled_messages WHERE sent = 0 AND datetime(scheduled_time) <= datetime(?)');
   const messagesToSend = stmt.all(now.toISOString());
-
-  if (messagesToSend.length > 0) {
-    console.log(`📤 Found ${messagesToSend.length} message(s) to send`);
-  }
 
   for (const msg of messagesToSend) {
     try {
-      // Phone number is already in correct format from contacts selector
-      // Groups: xxxxx@g.us, Contacts: xxxxx@c.us
       let chatId = msg.phone_number;
-      
-      // If manually entered, format it
       if (!chatId.includes('@')) {
         chatId = chatId.replace(/[^0-9]/g, '') + '@c.us';
       }
 
-      console.log(`  ⏳ Sending message ${msg.id} to ${chatId}...`);
+      console.log(`  📤 Sending message ${msg.id} to ${chatId}...`);
       await client.sendMessage(chatId, msg.message);
       
-      // Mark as sent
       const updateStmt = db.prepare('UPDATE scheduled_messages SET sent = 1 WHERE id = ?');
       updateStmt.run(msg.id);
       
-      console.log(`  ✓ Sent message ${msg.id}: "${msg.message.substring(0, 40)}..."`);
+      console.log(`  ✓ Sent: "${msg.message.substring(0, 40)}..."`);
       
-      // Small random delay to avoid detection
-      await new Promise(resolve => setTimeout(resolve, 500 + Math.random() * 1000));
+      const allScheduled = db.prepare('SELECT * FROM scheduled_messages WHERE sent = 0 ORDER BY scheduled_time ASC').all();
+      broadcast({ type: 'scheduled', data: allScheduled });
+      
+      // Small delay to avoid spam detection
+      await new Promise(resolve => setTimeout(resolve, 500));
     } catch (error) {
       console.error(`  ✗ Failed to send message ${msg.id}:`, error.message);
     }
   }
 });
 
-// Start server and WhatsApp client
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('📱 WhatsApp Message Scheduler');
-  console.log(`🌐 Server running on http://localhost:${PORT}`);
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('');
+  console.log(`🌐 Server: http://localhost:${PORT}`);
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
   initializeWhatsAppClient();
 });
