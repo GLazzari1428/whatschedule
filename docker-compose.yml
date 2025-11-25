@@ -1,12 +1,12 @@
 services:
   whatsapp-scheduler:
-    build: .
+    image: ghcr.io/glazzari1428/whatschedule:latest
     container_name: whatsapp-scheduler
     restart: unless-stopped
+    pull_policy: always
     ports:
       - "${PORT:-3000}:3000"
     volumes:
-      # Persist WhatsApp authentication and database
       - whatsapp-data:/app/data
       - whatsapp-auth:/app/.wwebjs_auth
     environment:
@@ -19,6 +19,23 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    networks:
+      - whatsapp-net
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+
+  watchtower:
+    image: containrrr/watchtower
+    container_name: watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_POLL_INTERVAL=60 #60 seconds between checks
+      - WATCHTOWER_LABEL_ENABLE=true
+      - WATCHTOWER_INCLUDE_RESTARTING=true
+      - TZ=${TZ:-America/Sao_Paulo}
     networks:
       - whatsapp-net
 
