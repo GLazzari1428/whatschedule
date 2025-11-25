@@ -1,12 +1,10 @@
-version: '3.8'
-
 services:
   whatsapp-scheduler:
     image: ghcr.io/glazzari1428/whatschedule:latest
     container_name: whatsapp-scheduler
     restart: unless-stopped
     pull_policy: always
-    network_mode: host  # Use host networking instead
+    network_mode: host
     volumes:
       - whatsapp-data:/app/data
       - whatsapp-auth:/app/.wwebjs_auth
@@ -24,12 +22,13 @@ services:
       - "com.centurylinklabs.watchtower.enable=true"
 
   watchtower:
-    image: containrrr/watchtower
+    image: containrrr/watchtower:latest
     container_name: watchtower
     restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
+      - DOCKER_API_VERSION=1.44  # Force newer API version
       - WATCHTOWER_CLEANUP=true
       - WATCHTOWER_POLL_INTERVAL=300
       - WATCHTOWER_LABEL_ENABLE=true
