@@ -22,24 +22,23 @@ You will need Docker and Docker Compose installed on your system, along with an 
    ```zsh
    git clone https://github.com/yourusername/whatsapp-scheduler.git
    cd whatsapp-scheduler
-```
-
+   ```
 2. Create your environment file by copying the example:
-```zsh
-   cp .env.example .env
-```
+   ```zsh
+      cp .env.example .env
+   ```
 3. Start the application with Docker Compose:
-```zsh
-   docker-compose up -d
-```
+   ```zsh
+      docker-compose up -d
+   ```
 
 4. Access the application by opening your web browser to http://localhost:3000
    You will need to scan the QR code with WhatsApp by going to Settings, then Linked Devices, then Link a Device.
 
 5. To view the application logs, use:
-```zsh
-   docker-compose logs -f
-```
+   ```zsh
+      docker-compose logs -f
+   ```
 
 ## Manual Installation without Docker
 
@@ -50,15 +49,15 @@ You will need Node.js version 16 or higher, along with npm or yarn package manag
 ### Setup
 
 1. Install all dependencies by running:
-```zsh
-   npm install
-```
+   ```zsh
+      npm install
+   ```
 
 2. Start the server with:
-```zsh
-   npm start
-```
-3. Access the application at http://127.0.0.1:3000 and scan the QR code with WhatsApp.
+   ```zsh
+      npm start
+   ```
+3. Access the application at http://{host-ip}:3000 and scan the QR code with WhatsApp.
 
 ## Usage Guide
 
@@ -81,35 +80,35 @@ You can edit the scheduled time of any message before it is sent. Individual mes
 ## Docker Commands Reference
 
 To build the Docker image, use:
-```zsh
-docker-compose build
-```
+   ```zsh
+   docker-compose build
+   ```
 
 To start the services in detached mode:
-```zsh
-docker-compose up -d
-```
+   ```zsh
+   docker-compose up -d
+   ```
 
 To stop all services:
-```zsh
-docker-compose down
-```
+   ```zsh
+   docker-compose down
+   ```
 
 To view real-time logs:
-```zsh
-docker-compose logs -f
-```
+   ```zsh
+   docker-compose logs -f
+   ```
 
 To restart the application:
-```zsh
-docker-compose restart
-```
+   ```zsh
+   docker-compose restart
+   ```
 
 To update to the latest version, first pull the latest code with git pull, then rebuild and restart:
-```zsh
-docker-compose build
-docker-compose up -d
-```
+   ```zsh
+   docker-compose build
+   docker-compose up -d
+   ```
 ## Data Persistence
 
 All data is persisted in Docker volumes to ensure nothing is lost when the container restarts. The whatsapp-data volume stores the database containing scheduled messages and favorites. The whatsapp-auth volume stores WhatsApp authentication data, which means you will not need to re-scan the QR code after restarting.
@@ -117,27 +116,27 @@ All data is persisted in Docker volumes to ensure nothing is lost when the conta
 ### Backup and Restore
 
 To backup your data volumes, run:
-```zsh
-docker run --rm -v whatsapp-scheduler_whatsapp-data:/data -v $(pwd):/backup alpine tar czf /backup/whatsapp-backup.tar.gz /data
-```
+   ```zsh
+   docker run --rm -v whatsapp-scheduler_whatsapp-data:/data -v $(pwd):/backup alpine tar czf /backup/whatsapp-backup.tar.gz /data
+   ```
 To restore from a backup:
-```zsh
-docker run --rm -v whatsapp-scheduler_whatsapp-data:/data -v $(pwd):/backup alpine tar xzf /backup/whatsapp-backup.tar.gz -C /
-```
+   ```zsh
+   docker run --rm -v whatsapp-scheduler_whatsapp-data:/data -v $(pwd):/backup alpine tar xzf /backup/whatsapp-backup.tar.gz -C /
+   ```
 ## Configuration
 
 Edit the .env file to customize your installation:
 
-```.env
-PORT=3000
-This sets the port number where the application will be accessible. Default is 3000.
-
-TZ=America/Sao_Paulo
-This sets the timezone for cron jobs and logging. Adjust to your local timezone.
-
-NODE_ENV=production
-This sets the Node.js environment mode. Use production for deployed instances.
-```
+   ```.env
+   PORT=3000
+   #This sets the port number where the application will be accessible. Default is 3000.
+   
+   TZ=America/Sao_Paulo
+   #This sets the timezone for cron jobs and logging. Adjust to your local timezone.
+   
+   NODE_ENV=production
+   #This sets the Node.js environment mode. Use production for deployed instances.
+   ```
 
 ## Security Notes
 
