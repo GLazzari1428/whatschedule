@@ -24,8 +24,9 @@ RUN npm ci --only=production
 # Copy application files
 COPY . .
 
-# Create data directory for SQLite and auth
-RUN mkdir -p /app/data
+# Create all necessary directories and set ownership
+RUN mkdir -p /app/data /app/.wwebjs_auth /app/.wwebjs_cache && \
+    chown -R node:node /app
 
 # Expose port
 EXPOSE 3000
