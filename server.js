@@ -6,15 +6,24 @@ const QRCode = require('qrcode');
 const Database = require('better-sqlite3');
 const http = require('http');
 const WebSocket = require('ws');
+const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
 const PORT = process.env.PORT || 3000;
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
+
+// Ensure data directory exists
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+}
 
 // Database setup
-const db = new Database('scheduler.db');
+const dbPath = path.join(DATA_DIR, 'scheduler.db');
+const db = new Database(dbPath);
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS scheduled_messages (
@@ -49,14 +58,18 @@ let lastCacheUpdate = null;
 function broadcast(data) {
   wss.clients.forEach(client => {
     if (client.readyState === WebSocket.OPEN) {
-      client.send(JSON.stringify(data));
+      try {
+        client.send(JSON.stringify(data));
+      } catch (error) {
+        console.error('WebSocket broadcast error:', error.message);
+      }
     }
   });
 }
 
 function initializeWhatsAppClient() {
-  client = new Client({
-    authStrategy: new LocalAuth(),
+  const clientOptions = {
+    authStrategy: new LocalAuth({ dataPath: path.join(__dirname, '.wwebjs_auth') }),
     puppeteer: {
       headless: true,
       args: [
@@ -66,11 +79,17 @@ function initializeWhatsAppClient() {
         '--disable-accelerated-2d-canvas',
         '--no-first-run',
         '--no-zygote',
-        '--single-process',
         '--disable-gpu'
       ]
     }
-  });
+  };
+
+  // Use system Chromium in Docker
+  if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+    clientOptions.puppeteer.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+  }
+
+  client = new Client(clientOptions);
 
   client.on('qr', (qr) => {
     console.log('📱 QR Code received');
@@ -105,8 +124,8 @@ function initializeWhatsAppClient() {
     console.log('✓ WhatsApp authenticated');
   });
 
-  client.on('auth_failure', () => {
-    console.error('✗ WhatsApp authentication failed');
+  client.on('auth_failure', (msg) => {
+    console.error('✗ WhatsApp authentication failed:', msg);
     isReady = false;
   });
 
@@ -117,7 +136,10 @@ function initializeWhatsAppClient() {
     broadcast({ type: 'disconnected' });
   });
 
-  client.initialize();
+  client.initialize().catch(err => {
+    console.error('Failed to initialize WhatsApp client:', err);
+    process.exit(1);
+  });
 }
 
 async function loadChatsCache() {
@@ -179,6 +201,12 @@ function calculateTypingDelay(messageLength) {
 // Middleware
 app.use(bodyParser.json());
 app.use(express.static('public'));
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Express error:', err.stack);
+  res.status(500).json({ error: 'Internal server error' });
+});
 
 // API Routes
 app.get('/api/status', (req, res) => {
@@ -267,15 +295,12 @@ app.post('/api/schedule', (req, res) => {
       const result = stmt.run(phoneNumber, msg, msgScheduledTime.toISOString(), batchId);
       insertedIds.push(result.lastInsertRowid);
       
-      const delaySeconds = Math.floor(cumulativeDelay / 1000);
-      console.log(`  ${index + 1}. Message scheduled at +${delaySeconds}s: "${msg.substring(0, 40)}..."`);
-      
       if (index < messages.length - 1) {
         cumulativeDelay += calculateTypingDelay(msg.length);
       }
     });
     
-    console.log(`✓ Scheduled ${messages.length} messages with batch ID: ${batchId}`);
+    console.log(`✓ Scheduled ${messages.length} messages`);
     
     const allScheduled = db.prepare('SELECT * FROM scheduled_messages WHERE sent = 0 ORDER BY scheduled_time ASC').all();
     broadcast({ type: 'scheduled', data: allScheduled });
@@ -350,7 +375,7 @@ app.delete('/api/scheduled/batch/:batchId', (req, res) => {
   }
 });
 
-// FIXED: Check every 5 seconds for precise timing
+// Cron job - every 5 seconds for precise timing
 cron.schedule('*/5 * * * * *', async () => {
   if (!isReady) return;
 
@@ -365,29 +390,48 @@ cron.schedule('*/5 * * * * *', async () => {
         chatId = chatId.replace(/[^0-9]/g, '') + '@c.us';
       }
 
-      console.log(`  📤 Sending message ${msg.id} to ${chatId}...`);
       await client.sendMessage(chatId, msg.message);
       
       const updateStmt = db.prepare('UPDATE scheduled_messages SET sent = 1 WHERE id = ?');
       updateStmt.run(msg.id);
       
-      console.log(`  ✓ Sent: "${msg.message.substring(0, 40)}..."`);
+      console.log(`✓ Sent message ${msg.id}`);
       
       const allScheduled = db.prepare('SELECT * FROM scheduled_messages WHERE sent = 0 ORDER BY scheduled_time ASC').all();
       broadcast({ type: 'scheduled', data: allScheduled });
       
-      // Small delay to avoid spam detection
       await new Promise(resolve => setTimeout(resolve, 500));
     } catch (error) {
-      console.error(`  ✗ Failed to send message ${msg.id}:`, error.message);
+      console.error(`✗ Failed to send message ${msg.id}:`, error.message);
     }
   }
 });
 
-server.listen(PORT, () => {
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, closing gracefully...');
+  server.close(() => {
+    if (client) client.destroy();
+    db.close();
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', () => {
+  console.log('SIGINT received, closing gracefully...');
+  server.close(() => {
+    if (client) client.destroy();
+    db.close();
+    process.exit(0);
+  });
+});
+
+server.listen(PORT, '0.0.0.0', () => {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('📱 WhatsApp Message Scheduler');
-  console.log(`🌐 Server: http://localhost:${PORT}`);
+  console.log(`🌐 Server: http://0.0.0.0:${PORT}`);
+  console.log(`📂 Data: ${DATA_DIR}`);
+  console.log(`🐳 Docker: ${process.env.PUPPETEER_EXECUTABLE_PATH ? 'Yes' : 'No'}`);
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
   initializeWhatsAppClient();
 });

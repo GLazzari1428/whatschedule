@@ -1,0 +1,33 @@
+services:
+  whatsapp-scheduler:
+    build: .
+    container_name: whatsapp-scheduler
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
+    volumes:
+      # Persist WhatsApp authentication and database
+      - whatsapp-data:/app/data
+      - whatsapp-auth:/app/.wwebjs_auth
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - TZ=${TZ:-America/Sao_Paulo}
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/status', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - whatsapp-net
+
+volumes:
+  whatsapp-data:
+    driver: local
+  whatsapp-auth:
+    driver: local
+
+networks:
+  whatsapp-net:
+    driver: bridge
