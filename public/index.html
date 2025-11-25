@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Message Scheduler</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #0b141a;
+            color: #e9edef;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: #1e2a2f;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 20px rgba(0,0,0,0.4);
+        }
+        h1 { 
+            color: #00a884; 
+            margin-bottom: 10px;
+        }
+        h2 {
+            color: #00a884;
+        }
+        p {
+            color: #8696a0;
+        }
+        .status {
+            padding: 15px;
+            border-radius: 6px;
+            margin: 20px 0;
+            font-weight: 500;
+        }
+        .status.ready { 
+            background: #0c4a3e; 
+            color: #25d366;
+            border: 1px solid #25d366;
+        }
+        .status.waiting { 
+            background: #3d3014; 
+            color: #ffb74d;
+            border: 1px solid #f9a825;
+        }
+        .status.loading {
+            background: #1a2a3a;
+            color: #64b5f6;
+            border: 1px solid #42a5f5;
+        }
+        .qr-code {
+            text-align: center;
+            margin: 20px 0;
+            background: #0b141a;
+            padding: 20px;
+            border-radius: 8px;
+        }
+        .qr-code h3 {
+            color: #e9edef;
+            margin-bottom: 10px;
+        }
+        .qr-code img {
+            max-width: 300px;
+            border: 2px solid #00a884;
+            border-radius: 8px;
+            background: white;
+            padding: 10px;
+        }
+        .form-group {
+            margin: 20px 0;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #e9edef;
+        }
+        .help-text {
+            font-size: 12px;
+            color: #8696a0;
+            margin-top: 4px;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #2a3942;
+            border-radius: 6px;
+            font-size: 14px;
+            background: #2a3942;
+            color: #e9edef;
+        }
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #00a884;
+        }
+        textarea {
+            min-height: 120px;
+            resize: vertical;
+            font-family: inherit;
+        }
+        select option {
+            background: #2a3942;
+            color: #e9edef;
+        }
+        button {
+            background: #00a884;
+            color: #111b21;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+        button:hover { 
+            background: #06cf9c;
+        }
+        button:disabled {
+            background: #374248;
+            color: #667781;
+            cursor: not-allowed;
+        }
+        .scheduled-list {
+            margin-top: 40px;
+        }
+        .batch-group {
+            margin-bottom: 20px;
+            border: 1px solid #374248;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .batch-header {
+            background: #0f1c22;
+            padding: 12px 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #374248;
+        }
+        .batch-header strong {
+            color: #00a884;
+        }
+        .scheduled-item {
+            background: #2a3942;
+            padding: 12px 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #374248;
+        }
+        .scheduled-item:last-child {
+            border-bottom: none;
+        }
+        .scheduled-info {
+            flex: 1;
+        }
+        .scheduled-info .message-text {
+            color: #e9edef;
+            margin-bottom: 4px;
+        }
+        .scheduled-info small {
+            color: #8696a0;
+            font-size: 11px;
+        }
+        .delete-btn {
+            background: #d32f2f;
+            padding: 6px 12px;
+            font-size: 13px;
+            color: white;
+        }
+        .delete-batch-btn {
+            background: #d32f2f;
+            padding: 6px 12px;
+            font-size: 12px;
+            color: white;
+        }
+        .delete-btn:hover, .delete-batch-btn:hover { 
+            background: #f44336;
+        }
+        .hidden { display: none; }
+        
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0b141a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #374248;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #4a5b66;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📱 WhatsApp Message Scheduler</h1>
+        <p style="margin-bottom: 20px;">Schedule messages with realistic typing delays · Groups supported</p>
+
+        <div id="status" class="status waiting">
+            ⏳ Checking WhatsApp connection...
+        </div>
+
+        <div id="qrSection" class="qr-code hidden">
+            <h3>Scan this QR code with WhatsApp</h3>
+            <p style="margin: 10px 0;">Open WhatsApp → Settings → Linked Devices → Link a Device</p>
+            <img id="qrImage" src="" alt="QR Code">
+        </div>
+
+        <div id="scheduleForm" class="hidden">
+            <h2 style="margin: 30px 0 20px;">Schedule Messages</h2>
+            
+            <div class="form-group">
+                <label for="contact">Contact or Group</label>
+                <select id="contact">
+                    <option value="">⏳ Loading contacts and groups...</option>
+                </select>
+                <div class="help-text">📁 Groups are listed first</div>
+            </div>
+
+            <div class="form-group">
+                <label for="phoneNumber">Or enter phone number (with country code)</label>
+                <input type="tel" id="phoneNumber" placeholder="5511999999999">
+                <div class="help-text">Only for contacts (not groups)</div>
+            </div>
+
+            <div class="form-group">
+                <label for="message">Message(s)</label>
+                <textarea id="message" placeholder="Type your message here...&#10;&#10;Use / to split into multiple messages with realistic delays:&#10;Hey/ How is it going?/ Want to go out sometime soon?"></textarea>
+                <div class="help-text">💡 Use <strong>/</strong> to split messages. They'll be sent with realistic typing delays!</div>
+            </div>
+
+            <div class="form-group">
+                <label for="scheduleTime">Start sending at</label>
+                <input type="datetime-local" id="scheduleTime">
+            </div>
+
+            <button onclick="scheduleMessage()">Schedule Message(s)</button>
+        </div>
+
+        <div id="scheduledList" class="scheduled-list hidden">
+            <h2 style="margin-bottom: 20px;">Scheduled Messages</h2>
+            <div id="messagesList"></div>
+        </div>
+    </div>
+
+    <script>
+        let contacts = [];
+        let contactsLoaded = false;
+
+        async function checkStatus() {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+
+                const statusDiv = document.getElementById('status');
+                const qrSection = document.getElementById('qrSection');
+                const scheduleForm = document.getElementById('scheduleForm');
+
+                if (data.isReady) {
+                    statusDiv.className = 'status ready';
+                    statusDiv.textContent = '✓ WhatsApp connected and ready';
+                    qrSection.classList.add('hidden');
+                    scheduleForm.classList.remove('hidden');
+                    
+                    if (!contactsLoaded) {
+                        loadContacts();
+                    }
+                    loadScheduledMessages();
+                } else if (data.hasQR) {
+                    statusDiv.className = 'status waiting';
+                    statusDiv.textContent = '📱 Waiting for QR code scan...';
+                    qrSection.classList.remove('hidden');
+                    document.getElementById('qrImage').src = data.qrCode;
+                    scheduleForm.classList.add('hidden');
+                }
+            } catch (error) {
+                console.error('Status check failed:', error);
+            }
+        }
+
+        async function loadContacts() {
+            const select = document.getElementById('contact');
+            select.innerHTML = '<option value="">⏳ Loading contacts and groups...</option>';
+            
+            try {
+                const response = await fetch('/api/contacts');
+                contacts = await response.json();
+                
+                if (contacts.length === 0) {
+                    select.innerHTML = '<option value="">No contacts loaded yet - use phone number field or wait a bit</option>';
+                    // Retry after a few seconds
+                    setTimeout(() => {
+                        if (!contactsLoaded) loadContacts();
+                    }, 5000);
+                } else {
+                    contactsLoaded = true;
+                    select.innerHTML = '<option value="">-- Select a contact or group --</option>';
+                    contacts.forEach(c => {
+                        const option = document.createElement('option');
+                        option.value = c.id;
+                        option.textContent = c.name;
+                        select.appendChild(option);
+                    });
+                    console.log(`Loaded ${contacts.length} contacts/groups`);
+                }
+            } catch (error) {
+                console.error('Failed to load contacts:', error);
+                select.innerHTML = '<option value="">Error loading - use phone number field below</option>';
+            }
+        }
+
+        async function scheduleMessage() {
+            const contactId = document.getElementById('contact').value;
+            const phoneNumber = document.getElementById('phoneNumber').value;
+            const message = document.getElementById('message').value;
+            const scheduleTime = document.getElementById('scheduleTime').value;
+
+            if (!message || !scheduleTime) {
+                alert('Please fill in message and schedule time');
+                return;
+            }
+
+            if (!contactId && !phoneNumber) {
+                alert('Please select a contact/group or enter a phone number');
+                return;
+            }
+
+            const finalPhone = contactId || phoneNumber;
+            const messageCount = message.split('/').filter(m => m.trim().length > 0).length;
+
+            if (messageCount > 1) {
+                if (!confirm(`This will schedule ${messageCount} messages with realistic typing delays. Continue?`)) {
+                    return;
+                }
+            }
+
+            try {
+                const response = await fetch('/api/schedule', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        phoneNumber: finalPhone,
+                        message,
+                        scheduledTime: new Date(scheduleTime).toISOString()
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (response.ok) {
+                    alert(`✓ ${result.count} message(s) scheduled successfully!`);
+                    document.getElementById('message').value = '';
+                    document.getElementById('scheduleTime').value = '';
+                    document.getElementById('contact').value = '';
+                    document.getElementById('phoneNumber').value = '';
+                    loadScheduledMessages();
+                } else {
+                    alert('Error: ' + result.error);
+                }
+            } catch (error) {
+                alert('Failed to schedule message: ' + error.message);
+            }
+        }
+
+        async function loadScheduledMessages() {
+            try {
+                const response = await fetch('/api/scheduled');
+                const messages = await response.json();
+
+                const listDiv = document.getElementById('scheduledList');
+                const messagesDiv = document.getElementById('messagesList');
+
+                if (messages.length === 0) {
+                    listDiv.classList.add('hidden');
+                    return;
+                }
+
+                listDiv.classList.remove('hidden');
+
+                // Group by batch_id
+                const batches = {};
+                messages.forEach(msg => {
+                    const batchId = msg.batch_id || msg.id.toString();
+                    if (!batches[batchId]) batches[batchId] = [];
+                    batches[batchId].push(msg);
+                });
+
+                messagesDiv.innerHTML = Object.entries(batches).map(([batchId, msgs]) => {
+                    const isBatch = msgs.length > 1;
+                    const displayName = msgs[0].phone_number.includes('@') ? 
+                        (msgs[0].phone_number.includes('@g.us') ? '📁 Group' : 'Contact') : 
+                        msgs[0].phone_number;
+                    
+                    if (isBatch) {
+                        return `
+                            <div class="batch-group">
+                                <div class="batch-header">
+                                    <strong>📨 ${msgs.length} messages to ${displayName}</strong>
+                                    <button class="delete-batch-btn" onclick="deleteBatch('${batchId}')">Delete All</button>
+                                </div>
+                                ${msgs.map((msg, idx) => `
+                                    <div class="scheduled-item">
+                                        <div class="scheduled-info">
+                                            <div class="message-text">${idx + 1}. ${msg.message.substring(0, 60)}${msg.message.length > 60 ? '...' : ''}</div>
+                                            <small>⏰ ${new Date(msg.scheduled_time).toLocaleString()}</small>
+                                        </div>
+                                        <button class="delete-btn" onclick="deleteMessage(${msg.id})">✕</button>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        `;
+                    } else {
+                        const msg = msgs[0];
+                        return `
+                            <div class="scheduled-item" style="border: 1px solid #374248; border-radius: 8px; margin-bottom: 10px;">
+                                <div class="scheduled-info">
+                                    <div class="message-text">${msg.message.substring(0, 80)}${msg.message.length > 80 ? '...' : ''}</div>
+                                    <small>To: ${displayName} | At: ${new Date(msg.scheduled_time).toLocaleString()}</small>
+                                </div>
+                                <button class="delete-btn" onclick="deleteMessage(${msg.id})">Delete</button>
+                            </div>
+                        `;
+                    }
+                }).join('');
+            } catch (error) {
+                console.error('Failed to load scheduled messages:', error);
+            }
+        }
+
+        async function deleteMessage(id) {
+            try {
+                const response = await fetch(`/api/scheduled/${id}`, { method: 'DELETE' });
+                if (response.ok) {
+                    loadScheduledMessages();
+                } else {
+                    alert('Failed to delete message');
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        async function deleteBatch(batchId) {
+            if (!confirm('Delete all messages in this batch?')) return;
+
+            try {
+                const response = await fetch(`/api/scheduled/batch/${batchId}`, { method: 'DELETE' });
+                if (response.ok) {
+                    loadScheduledMessages();
+                } else {
+                    alert('Failed to delete batch');
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        // Initialize
+        checkStatus();
+        setInterval(checkStatus, 3000);
+        setInterval(loadScheduledMessages, 10000);
+
+        // Set minimum datetime to now
+        const now = new Date();
+        now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+        document.getElementById('scheduleTime').min = now.toISOString().slice(0, 16);
+    </script>
+</body>
+</html>

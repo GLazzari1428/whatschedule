@@ -1,0 +1,28 @@
+2025/11/24-23:53:44.692 10278 Reusing MANIFEST /home/glazzari/Gitclones/whatschedule/.wwebjs_auth/session/Default/IndexedDB/https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001
+2025/11/24-23:53:44.692 10278 Recovering log #339
+2025/11/24-23:53:44.725 10278 Reusing old log /home/glazzari/Gitclones/whatschedule/.wwebjs_auth/session/Default/IndexedDB/https_web.whatsapp.com_0.indexeddb.leveldb/000339.log 
+2025/11/24-23:53:46.292 1027a Level-0 table #349: started
+2025/11/24-23:53:46.305 1027a Level-0 table #349: 353072 bytes OK
+2025/11/24-23:53:46.314 1027a Delete type=0 #339
+2025/11/24-23:53:46.315 1027a Manual compaction at level-0 from '\x00\x1e\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00\x1f\x00\x00\x00' @ 0 : 0; will stop at (end)
+2025/11/24-23:53:48.370 1027a Compacting 1@1 + 9@2 files
+2025/11/24-23:53:48.436 1027a Generated table #350@1: 67405 keys, 2229422 bytes
+2025/11/24-23:53:48.495 1027a Generated table #351@1: 42823 keys, 2203711 bytes
+2025/11/24-23:53:48.522 1027a Generated table #352@1: 2920 keys, 2164977 bytes
+2025/11/24-23:53:48.551 1027a Generated table #353@1: 9076 keys, 2167985 bytes
+2025/11/24-23:53:48.607 1027a Generated table #354@1: 32294 keys, 2235885 bytes
+2025/11/24-23:53:48.641 1027a Generated table #355@1: 12836 keys, 2170733 bytes
+2025/11/24-23:53:48.710 1027a Generated table #356@1: 102951 keys, 2253319 bytes
+2025/11/24-23:53:48.768 1027a Generated table #357@1: 78481 keys, 1792770 bytes
+2025/11/24-23:53:48.768 1027a Compacted 1@1 + 9@2 files => 17218802 bytes
+2025/11/24-23:53:48.781 1027a compacted to: files[ 0 0 8 0 0 0 0 ]
+2025/11/24-23:53:48.781 1027a Delete type=2 #338
+2025/11/24-23:53:48.781 1027a Delete type=2 #342
+2025/11/24-23:53:48.781 1027a Delete type=2 #337
+2025/11/24-23:53:48.781 1027a Delete type=2 #345
+2025/11/24-23:53:48.781 1027a Delete type=2 #341
+2025/11/24-23:53:48.781 1027a Delete type=2 #346
+2025/11/24-23:53:48.781 1027a Delete type=2 #344
+2025/11/24-23:53:48.781 1027a Delete type=2 #349
+2025/11/24-23:53:48.781 1027a Delete type=2 #343
+2025/11/24-23:53:48.781 1027a Delete type=2 #336
