@@ -92,8 +92,14 @@
             margin-bottom: 15px;
         }
         
+        .search-header {
+            display: flex;
+            gap: 10px;
+            align-items: stretch;
+        }
+        
         .search-box {
-            width: 100%;
+            flex: 1;
             padding: 14px 16px;
             background: #2a3942;
             border: 2px solid #374248;
@@ -101,6 +107,36 @@
             color: #e9edef;
             font-size: 15px;
             transition: all 0.2s;
+        }
+        
+        .refresh-btn {
+            background: #374248;
+            color: #e9edef;
+            border: none;
+            padding: 14px 20px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 18px;
+            transition: all 0.2s;
+            min-width: 52px;
+        }
+        
+        .refresh-btn:hover {
+            background: #4a5b66;
+        }
+        
+        .refresh-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .refresh-btn.spinning {
+            animation: spin 1s linear;
+        }
+        
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
         }
         
         .search-box:focus {
@@ -151,9 +187,20 @@
             border-left: 3px solid #00a884;
         }
         
-        .result-name {
+        .result-info {
             flex: 1;
+            min-width: 0;
+        }
+        
+        .result-name {
             font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 2px;
+        }
+        
+        .result-number {
+            font-size: 12px;
+            color: #8696a0;
         }
         
         .result-icon {
@@ -189,6 +236,22 @@
             margin-bottom: 8px;
             cursor: pointer;
             transition: all 0.2s;
+        }
+        
+        .favorite-info {
+            flex: 1;
+            min-width: 0;
+        }
+        
+        .favorite-name {
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 2px;
+        }
+        
+        .favorite-number {
+            font-size: 12px;
+            color: #8696a0;
         }
         
         .favorite-item:hover {
@@ -476,11 +539,11 @@
 <body>
     <div class="container">
         <div class="card">
-            <h1>📱 WhatsApp Scheduler</h1>
+            <h1>WhatsApp Scheduler</h1>
             <p class="subtitle">Real-time scheduling with precise delays</p>
 
             <div id="status" class="status waiting">
-                ⏳ Connecting...
+                Connecting...
             </div>
 
             <div id="qrSection" class="qr-code hidden">
@@ -492,7 +555,7 @@
 
         <div id="scheduleForm" class="hidden">
             <div class="card">
-                <h2>⭐ Favorites</h2>
+                <h2>Favorites</h2>
                 <div id="favoritesSection" class="favorites-section"></div>
             </div>
             
@@ -500,15 +563,20 @@
                 <h2>Schedule Messages</h2>
                 
                 <div class="form-group">
-                    <label>🔍 Search contacts or groups</label>
+                    <label>Search contacts or groups</label>
                     <div class="search-container">
-                        <input 
-                            type="text" 
-                            id="searchBox" 
-                            class="search-box" 
-                            placeholder="Type to search..."
-                            autocomplete="off"
-                        >
+                        <div class="search-header">
+                            <input 
+                                type="text" 
+                                id="searchBox" 
+                                class="search-box" 
+                                placeholder="Type to search..."
+                                autocomplete="off"
+                            >
+                            <button class="refresh-btn" id="refreshBtn" title="Refresh contacts">
+                                Refresh
+                            </button>
+                        </div>
                         <div id="searchResults" class="search-results"></div>
                     </div>
                     <div id="selectedContactDisplay"></div>
@@ -523,11 +591,11 @@
                         </div>
                     </div>
                     <button class="add-message-btn" onclick="addMessageInput()">+ Add Another Message</button>
-                    <div class="help-text">💡 Multiple messages sent with realistic typing delays (3-8 seconds apart)</div>
+                    <div class="help-text">Multiple messages sent with realistic typing delays (3-8 seconds apart)</div>
                 </div>
 
                 <div class="form-group">
-                    <label>📅 Schedule Date & Time (24-hour format)</label>
+                    <label>Schedule Date & Time (24-hour format)</label>
                     <div class="time-picker-wrapper">
                         <input type="date" id="scheduleDate">
                         <div class="custom-time-picker">
@@ -543,20 +611,50 @@
             </div>
 
             <div id="scheduledList" class="card hidden">
-                <h2>📬 Scheduled Messages</h2>
+                <h2>Scheduled Messages</h2>
                 <div id="messagesList"></div>
             </div>
         </div>
     </div>
 
     <script>
+        const SERVER_KEY = 'whatscheduler_server_url';
+        let BASE_URL = '';
         let ws;
         let contacts = [];
         let favorites = [];
         let selectedContact = null;
 
+        // Get contact phone number
+        function getContactNumber(contact) {
+            // Groups don't have phone numbers
+            if (contact.isGroup) return '';
+            
+            // If contact has number property, use it
+            if (contact.number) return contact.number;
+            
+            // Extract from ID using regex
+            // ID format: "5511999999999@c.us"
+            const match = contact.id.match(/(\d+)@/);
+            return match ? match[1] : '';
+        }
+
         // Format time inputs
         document.addEventListener('DOMContentLoaded', () => {
+            // Check for server URL configuration
+            BASE_URL = localStorage.getItem(SERVER_KEY);
+            
+            // If no server URL configured, redirect to config
+            if (!BASE_URL) {
+                window.location.href = 'config.html';
+                return;
+            }
+            
+            // Initialize the app
+            initializeApp();
+        });
+        
+        function initializeApp() {
             const hourInput = document.getElementById('hourInput');
             const minuteInput = document.getElementById('minuteInput');
 
@@ -579,14 +677,61 @@
             document.getElementById('scheduleDate').valueAsDate = now;
             hourInput.value = now.getHours().toString().padStart(2, '0');
             minuteInput.value = now.getMinutes().toString().padStart(2, '0');
-        });
+            
+            // Attach refresh button handler
+            document.getElementById('refreshBtn').addEventListener('click', refreshContacts);
+            
+            // Initialize WebSocket and check status
+            connectWebSocket();
+            
+            fetch(`${BASE_URL}/api/status`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.isReady) {
+                        updateStatus(true);
+                    } else if (data.hasQR) {
+                        showQR(data.qrCode);
+                    }
+                });
+        }
+
+        // Refresh contacts
+        async function refreshContacts() {
+            const btn = document.getElementById('refreshBtn');
+            
+            // Add spinning animation
+            btn.classList.add('spinning');
+            btn.disabled = true;
+            
+            try {
+                // Force refresh by adding query parameter
+                const res = await fetch(`${BASE_URL}/api/contacts?refresh=true`);
+                contacts = await res.json();
+                
+                // Update UI
+                renderSearchResults();
+                
+                // Success feedback
+                btn.textContent = 'Done';
+                setTimeout(() => {
+                    btn.textContent = 'Refresh';
+                    btn.classList.remove('spinning');
+                    btn.disabled = false;
+                }, 1000);
+            } catch (e) {
+                console.error('Failed to refresh:', e);
+                btn.classList.remove('spinning');
+                btn.disabled = false;
+            }
+        }
 
         // WebSocket connection
         function connectWebSocket() {
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            ws = new WebSocket(`${protocol}//${window.location.host}`);
+            // Convert HTTP URL to WebSocket URL
+            const wsUrl = BASE_URL.replace('http://', 'ws://').replace('https://', 'wss://');
+            ws = new WebSocket(wsUrl);
 
-            ws.onopen = () => console.log('✓ WebSocket connected');
+            ws.onopen = () => console.log('WebSocket connected');
 
             ws.onmessage = (event) => {
                 const data = JSON.parse(event.data);
@@ -598,9 +743,16 @@
                     case 'ready':
                         updateStatus(true);
                         break;
+                    case 'contacts_progress':
+                        updateContactsProgress(data.data.current, data.data.total);
+                        break;
                     case 'contacts':
                         contacts = data.data;
                         renderSearchResults();
+                        // Update status to show connected after contacts are loaded
+                        const statusDiv = document.getElementById('status');
+                        statusDiv.className = 'status ready';
+                        statusDiv.textContent = `WhatsApp connected (${contacts.length} contacts loaded)`;
                         break;
                     case 'favorites':
                         favorites = data.data;
@@ -627,34 +779,42 @@
             document.getElementById('scheduleForm').classList.add('hidden');
         }
 
-        function updateStatus(ready) {
+        function updateStatus(ready, showConnecting = true) {
             const statusDiv = document.getElementById('status');
             if (ready) {
                 statusDiv.className = 'status ready';
-                statusDiv.textContent = '✓ WhatsApp connected';
+                statusDiv.textContent = 'WhatsApp connected';
                 document.getElementById('qrSection').classList.add('hidden');
                 document.getElementById('scheduleForm').classList.remove('hidden');
-                loadInitialData();
+                if (showConnecting) {
+                    loadInitialData();
+                }
             } else {
                 statusDiv.className = 'status waiting';
-                statusDiv.textContent = '⏳ Connecting...';
+                statusDiv.textContent = 'Connecting...';
             }
+        }
+        
+        function updateContactsProgress(current, total) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.className = 'status waiting';
+            statusDiv.textContent = `Loading contacts ${current}/${total}...`;
         }
 
         async function loadInitialData() {
             try {
-                const res = await fetch('/api/contacts');
+                const res = await fetch(`${BASE_URL}/api/contacts`);
                 contacts = await res.json();
             } catch (e) {}
 
             try {
-                const res = await fetch('/api/favorites');
+                const res = await fetch(`${BASE_URL}/api/favorites`);
                 favorites = await res.json();
                 renderFavorites();
             } catch (e) {}
 
             try {
-                const res = await fetch('/api/scheduled');
+                const res = await fetch(`${BASE_URL}/api/scheduled`);
                 const messages = await res.json();
                 renderScheduledMessages(messages);
             } catch (e) {}
@@ -684,18 +844,25 @@
             }
 
             const filtered = query ?
-                contacts.filter(c => c.name.toLowerCase().includes(query.toLowerCase())) :
+                contacts.filter(c => 
+                    c.name.toLowerCase().includes(query.toLowerCase()) ||
+                    getContactNumber(c).includes(query)
+                ) :
                 contacts;
 
             searchResults.innerHTML = filtered.slice(0, 50).map(contact => {
                 const isFavorite = favorites.some(f => f.chat_id === contact.id);
+                const phoneNumber = getContactNumber(contact);
                 return `
                     <div class="search-result-item ${selectedContact && selectedContact.id === contact.id ? 'selected' : ''}" 
                          onclick="selectContact('${contact.id}')">
-                        <span class="result-name">
-                            <span class="result-icon">${contact.isGroup ? '📁' : '👤'}</span>
-                            ${contact.name}
-                        </span>
+                        <div class="result-info">
+                            <div class="result-name">
+                                <span class="result-icon">${contact.isGroup ? '📁' : '👤'}</span>
+                                ${contact.name}
+                            </div>
+                            ${phoneNumber ? `<div class="result-number">${phoneNumber}</div>` : ''}
+                        </div>
                         <button class="star-btn ${isFavorite ? 'starred' : ''}" 
                                 onclick="event.stopPropagation(); toggleFavorite('${contact.id}', '${contact.name.replace(/'/g, "\\'")}', ${contact.isGroup})">
                             ${isFavorite ? '★' : '☆'}
@@ -739,9 +906,9 @@
             
             try {
                 if (isFavorite) {
-                    await fetch(`/api/favorites/${encodeURIComponent(chatId)}`, { method: 'DELETE' });
+                    await fetch(`${BASE_URL}/api/favorites/${encodeURIComponent(chatId)}`, { method: 'DELETE' });
                 } else {
-                    await fetch('/api/favorites', {
+                    await fetch(`${BASE_URL}/api/favorites`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ chatId, name, isGroup })
@@ -757,13 +924,22 @@
                 return;
             }
 
-            section.innerHTML = favorites.map(fav => `
-                <div class="favorite-item ${selectedContact && selectedContact.id === fav.chat_id ? 'selected' : ''}" 
-                     onclick="selectContact('${fav.chat_id}')">
-                    <span>${fav.is_group ? '📁' : '👤'} ${fav.name}</span>
-                    <button class="remove-fav" onclick="event.stopPropagation(); toggleFavorite('${fav.chat_id}', '${fav.name.replace(/'/g, "\\'")}', ${fav.is_group})">✕</button>
-                </div>
-            `).join('');
+            section.innerHTML = favorites.map(fav => {
+                const contact = contacts.find(c => c.id === fav.chat_id);
+                const phoneNumber = contact ? getContactNumber(contact) : '';
+                return `
+                    <div class="favorite-item ${selectedContact && selectedContact.id === fav.chat_id ? 'selected' : ''}" 
+                         onclick="selectContact('${fav.chat_id}')">
+                        <div class="favorite-info">
+                            <div class="favorite-name">
+                                ${fav.is_group ? '📁' : '👤'} ${fav.name}
+                            </div>
+                            ${phoneNumber ? `<div class="favorite-number">${phoneNumber}</div>` : ''}
+                        </div>
+                        <button class="remove-fav" onclick="event.stopPropagation(); toggleFavorite('${fav.chat_id}', '${fav.name.replace(/'/g, "\\'")}', ${fav.is_group})">✕</button>
+                    </div>
+                `;
+            }).join('');
         }
 
         function addMessageInput() {
@@ -822,7 +998,7 @@
             }
 
             try {
-                const response = await fetch('/api/schedule', {
+                const response = await fetch(`${BASE_URL}/api/schedule`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
@@ -835,7 +1011,7 @@
                 const result = await response.json();
                 
                 if (response.ok) {
-                    alert(`✓ ${result.count} message(s) scheduled!`);
+                    alert(`${result.count} message(s) scheduled!`);
                     messageInputs.forEach(input => input.value = '');
                     clearSelection();
                 } else {
@@ -867,7 +1043,7 @@
             messagesDiv.innerHTML = Object.entries(batches).map(([batchId, msgs]) => {
                 const isBatch = msgs.length > 1;
                 const displayName = msgs[0].phone_number.includes('@g.us') ? '📁 Group' : 
-                                   msgs[0].phone_number.includes('@') ? 'Contact' : msgs[0].phone_number;
+                                   msgs[0].phone_number.includes('@') ? '👤 Contact' : msgs[0].phone_number;
                 
                 if (isBatch) {
                     return `
@@ -914,29 +1090,18 @@
 
         async function deleteMessage(id) {
             try {
-                await fetch(`/api/scheduled/${id}`, { method: 'DELETE' });
+                await fetch(`${BASE_URL}/api/scheduled/${id}`, { method: 'DELETE' });
             } catch (error) {}
         }
 
         async function deleteBatch(batchId) {
             if (!confirm('Delete all messages in this batch?')) return;
             try {
-                await fetch(`/api/scheduled/batch/${batchId}`, { method: 'DELETE' });
+                await fetch(`${BASE_URL}/api/scheduled/batch/${batchId}`, { method: 'DELETE' });
             } catch (error) {}
         }
 
-        // Initialize
-        connectWebSocket();
-        
-        fetch('/api/status')
-            .then(r => r.json())
-            .then(data => {
-                if (data.isReady) {
-                    updateStatus(true);
-                } else if (data.hasQR) {
-                    showQR(data.qrCode);
-                }
-            });
+        // WebSocket and status check are now initialized in initializeApp()
     </script>
 </body>
 </html>

@@ -143,3 +143,13 @@ vite.config.ts.timestamp-*
 .wwebjs_cache/*
 .wwebjs_auth/*
 scheduler.db
+
+# Android/Capacitor
+android/
+ios/
+.capacitor/
+
+# Signing keys - NEVER commit these!
+*.keystore
+*.jks
+key.properties

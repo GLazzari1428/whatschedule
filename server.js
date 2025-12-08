@@ -92,7 +92,7 @@ function initializeWhatsAppClient() {
   client = new Client(clientOptions);
 
   client.on('qr', (qr) => {
-    console.log('📱 QR Code received');
+    console.log('QR Code received');
     qrCodeData = qr;
     QRCode.toDataURL(qr, (err, url) => {
       if (!err) {
@@ -103,34 +103,34 @@ function initializeWhatsAppClient() {
   });
 
   client.on('ready', async () => {
-    console.log('✓ WhatsApp Client is ready!');
+    console.log('WhatsApp Client is ready!');
     isReady = true;
     qrCodeData = null;
     broadcast({ type: 'ready' });
     
     setTimeout(async () => {
       try {
-        console.log('⏳ Preloading chats...');
+        console.log('Preloading chats...');
         await loadChatsCache();
-        console.log(`✓ Successfully loaded ${chatsCache ? chatsCache.length : 0} chats`);
+        console.log(`Successfully loaded ${chatsCache ? chatsCache.length : 0} chats`);
         broadcast({ type: 'contacts', data: chatsCache });
       } catch (error) {
-        console.error('✗ Error preloading chats:', error.message);
+        console.error('Error preloading chats:', error.message);
       }
     }, 3000);
   });
 
   client.on('authenticated', () => {
-    console.log('✓ WhatsApp authenticated');
+    console.log('WhatsApp authenticated');
   });
 
   client.on('auth_failure', (msg) => {
-    console.error('✗ WhatsApp authentication failed:', msg);
+    console.error('WhatsApp authentication failed:', msg);
     isReady = false;
   });
 
   client.on('disconnected', (reason) => {
-    console.log('⚠ WhatsApp disconnected:', reason);
+    console.log('WhatsApp disconnected:', reason);
     isReady = false;
     chatsCache = null;
     broadcast({ type: 'disconnected' });
@@ -142,17 +142,20 @@ function initializeWhatsAppClient() {
   });
 }
 
-async function loadChatsCache() {
+async function loadChatsCache(forceRefresh = false) {
   try {
     const now = Date.now();
-    if (chatsCache && lastCacheUpdate && (now - lastCacheUpdate) < 30000) {
+    // If forceRefresh is true, bypass cache check
+    if (!forceRefresh && chatsCache && lastCacheUpdate && (now - lastCacheUpdate) < 30000) {
       return chatsCache;
     }
     
     const allChats = await client.getChats();
     const processed = [];
+    const totalChats = allChats.length;
     
-    for (const chat of allChats) {
+    for (let i = 0; i < allChats.length; i++) {
+      const chat = allChats[i];
       try {
         if (chat.isGroup) {
           processed.push({
@@ -170,6 +173,17 @@ async function loadChatsCache() {
             isGroup: false
           });
         }
+        
+        // Broadcast progress every 10 chats or on last chat
+        if ((i + 1) % 10 === 0 || (i + 1) === totalChats) {
+          broadcast({ 
+            type: 'contacts_progress', 
+            data: { 
+              current: i + 1, 
+              total: totalChats 
+            } 
+          });
+        }
       } catch (err) {
         console.error(`Error processing chat:`, err.message);
       }
@@ -184,7 +198,7 @@ async function loadChatsCache() {
     lastCacheUpdate = now;
     return chatsCache;
   } catch (error) {
-    console.error('✗ Error loading chats cache:', error.message);
+    console.error('Error loading chats cache:', error.message);
     throw error;
   }
 }
@@ -201,6 +215,18 @@ function calculateTypingDelay(messageLength) {
 // Middleware
 app.use(bodyParser.json());
 app.use(express.static('public'));
+
+// CORS middleware - Allow requests from Capacitor app
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With');
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(200);
+  } else {
+    next();
+  }
+});
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -223,7 +249,9 @@ app.get('/api/contacts', async (req, res) => {
   }
   
   try {
-    const chats = await loadChatsCache();
+    // Check for refresh parameter to force cache reload
+    const forceRefresh = req.query.refresh === 'true';
+    const chats = await loadChatsCache(forceRefresh);
     res.json(chats || []);
   } catch (error) {
     res.json([]);
@@ -300,7 +328,7 @@ app.post('/api/schedule', (req, res) => {
       }
     });
     
-    console.log(`✓ Scheduled ${messages.length} messages`);
+    console.log(`Scheduled ${messages.length} messages`);
     
     const allScheduled = db.prepare('SELECT * FROM scheduled_messages WHERE sent = 0 ORDER BY scheduled_time ASC').all();
     broadcast({ type: 'scheduled', data: allScheduled });
@@ -311,7 +339,7 @@ app.post('/api/schedule', (req, res) => {
       ids: insertedIds
     });
   } catch (error) {
-    console.error('✗ Error scheduling:', error.message);
+    console.error('Error scheduling:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -395,14 +423,14 @@ cron.schedule('*/5 * * * * *', async () => {
       const updateStmt = db.prepare('UPDATE scheduled_messages SET sent = 1 WHERE id = ?');
       updateStmt.run(msg.id);
       
-      console.log(`✓ Sent message ${msg.id}`);
+      console.log(`Sent message ${msg.id}`);
       
       const allScheduled = db.prepare('SELECT * FROM scheduled_messages WHERE sent = 0 ORDER BY scheduled_time ASC').all();
       broadcast({ type: 'scheduled', data: allScheduled });
       
       await new Promise(resolve => setTimeout(resolve, 500));
     } catch (error) {
-      console.error(`✗ Failed to send message ${msg.id}:`, error.message);
+      console.error(`Failed to send message ${msg.id}:`, error.message);
     }
   }
 });
