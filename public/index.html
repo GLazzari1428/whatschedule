@@ -708,8 +708,9 @@
                 const res = await fetch(`${BASE_URL}/api/contacts?refresh=true`);
                 contacts = await res.json();
                 
-                // Update UI
-                renderSearchResults();
+                // Update UI - force update even if dropdown is open
+                const currentQuery = document.getElementById('searchBox').value;
+                renderSearchResults(currentQuery, true);
                 
                 // Success feedback
                 btn.textContent = 'Done';
@@ -838,8 +839,9 @@
             }
         });
 
-        function renderSearchResults(query = '') {
-            if (!query && searchResults.children.length > 0) {
+        function renderSearchResults(query = '', forceUpdate = false) {
+            // Only skip rendering if there's no query, results are already shown, and we're not forcing an update
+            if (!query && !forceUpdate && searchResults.children.length > 0) {
                 return;
             }
 
