@@ -1,10 +1,16 @@
 services:
   whatsapp-scheduler:
-    image: ghcr.io/glazzari1428/whatschedule:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # Alternative: use pre-built image
+    # image: ghcr.io/glazzari1428/whatschedule:latest
     container_name: whatsapp-scheduler
     restart: unless-stopped
-    pull_policy: always
     network_mode: host
+    # Alternative: use bridge network with port mapping
+    # ports:
+    #   - "${PORT:-3000}:3000"
     volumes:
       - whatsapp-data:/app/data
       - whatsapp-auth:/app/.wwebjs_auth

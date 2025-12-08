@@ -8,3 +8,10 @@ README.md
 *.db
 .wwebjs_auth
 data
+android
+ios
+.capacitor
+*.md
+!README.md
+scripts
+.github
