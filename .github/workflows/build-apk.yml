@@ -59,8 +59,25 @@ jobs:
           EOF
           
           # Update AndroidManifest.xml to use network security config
-          if ! grep -q "networkSecurityConfig" android/app/src/main/AndroidManifest.xml; then
-            sed -i '/<application/a\        android:usesCleartextTraffic="true"\n        android:networkSecurityConfig="@xml/network_security_config"' android/app/src/main/AndroidManifest.xml
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          if ! grep -q "networkSecurityConfig" "$MANIFEST"; then
+            # Use Python to properly insert the attributes
+            python3 << 'PYTHON'
+          import re
+          
+          with open('android/app/src/main/AndroidManifest.xml', 'r') as f:
+              content = f.read()
+          
+          # Find the <application> tag and add attributes if not present
+          if 'networkSecurityConfig' not in content:
+              # Add usesCleartextTraffic and networkSecurityConfig to application tag
+              pattern = r'(<application\s+[^>]*)>'
+              replacement = r'\1\n        android:usesCleartextTraffic="true"\n        android:networkSecurityConfig="@xml/network_security_config">'
+              content = re.sub(pattern, replacement, content, count=1)
+          
+          with open('android/app/src/main/AndroidManifest.xml', 'w') as f:
+              f.write(content)
+          PYTHON
           fi
       
       - name: Build debug APK
