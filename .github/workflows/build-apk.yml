@@ -52,21 +52,52 @@ jobs:
       - name: Get version info
         id: version
         run: |
-          echo "VERSION=$(date +'%Y%m%d-%H%M%S')" >> $GITHUB_OUTPUT
-          echo "COMMIT_SHA=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          BUILD_DATE=$(date +'%Y%m%d-%H%M%S')
+          COMMIT_SHA=$(git rev-parse --short HEAD)
+          echo "VERSION=${PACKAGE_VERSION}" >> $GITHUB_OUTPUT
+          echo "BUILD_DATE=${BUILD_DATE}" >> $GITHUB_OUTPUT
+          echo "COMMIT_SHA=${COMMIT_SHA}" >> $GITHUB_OUTPUT
+          echo "TAG_NAME=v${PACKAGE_VERSION}-${BUILD_DATE}" >> $GITHUB_OUTPUT
       
       - name: Rename APK files
         run: |
-          VERSION="${{ steps.version.outputs.VERSION }}"
+          BUILD_DATE="${{ steps.version.outputs.BUILD_DATE }}"
           COMMIT="${{ steps.version.outputs.COMMIT_SHA }}"
           
           mv android/app/build/outputs/apk/debug/app-debug.apk \
-             android/app/build/outputs/apk/debug/WhatScheduler-debug-${VERSION}-${COMMIT}.apk
+             android/app/build/outputs/apk/debug/WhatScheduler-debug-${BUILD_DATE}-${COMMIT}.apk
       
-      - name: Upload Debug APK
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.TAG_NAME }}
+          name: Release ${{ steps.version.outputs.VERSION }} (${{ steps.version.outputs.BUILD_DATE }})
+          body: |
+            ## WhatScheduler ${{ steps.version.outputs.VERSION }}
+            
+            **Build Date:** ${{ steps.version.outputs.BUILD_DATE }}
+            **Commit:** ${{ steps.version.outputs.COMMIT_SHA }}
+            
+            ### Changes
+            See commit history for detailed changes.
+            
+            ### Installation
+            1. Download the APK below
+            2. Enable "Install from Unknown Sources" on your Android device
+            3. Install the APK
+            4. Configure your server URL on first launch
+          files: |
+            android/app/build/outputs/apk/debug/WhatScheduler-debug-${{ steps.version.outputs.BUILD_DATE }}-${{ steps.version.outputs.COMMIT_SHA }}.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Upload Debug APK as Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: whatscheduler-debug-${{ steps.version.outputs.VERSION }}
+          name: whatscheduler-debug-${{ steps.version.outputs.BUILD_DATE }}
           path: android/app/build/outputs/apk/debug/*.apk
           retention-days: 30
 
