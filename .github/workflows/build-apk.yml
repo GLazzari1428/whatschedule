@@ -44,6 +44,25 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync
       
+      - name: Setup Network Security Config
+        run: |
+          mkdir -p android/app/src/main/res/xml
+          cat > android/app/src/main/res/xml/network_security_config.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <network-security-config>
+              <base-config cleartextTrafficPermitted="true">
+                  <trust-anchors>
+                      <certificates src="system" />
+                  </trust-anchors>
+              </base-config>
+          </network-security-config>
+          EOF
+          
+          # Update AndroidManifest.xml to use network security config
+          if ! grep -q "networkSecurityConfig" android/app/src/main/AndroidManifest.xml; then
+            sed -i '/<application/a\        android:usesCleartextTraffic="true"\n        android:networkSecurityConfig="@xml/network_security_config"' android/app/src/main/AndroidManifest.xml
+          fi
+      
       - name: Build debug APK
         run: |
           cd android
