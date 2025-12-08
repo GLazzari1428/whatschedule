@@ -1,0 +1,14 @@
+{
+  "appId": "com.whatscheduler.app",
+  "appName": "WhatScheduler",
+  "webDir": "public",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": true,
+    "backgroundColor": "#0b141a"
+  }
+}
+

@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <link rel="icon" type="image/x-icon" href="./images/favicon.ico">
+    <title>Server Configuration - WhatsApp Scheduler</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0b141a;
+            color: #e9edef;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 500px;
+            width: 100%;
+        }
+        
+        .card {
+            background: #1e2a2f;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 2px 20px rgba(0,0,0,0.4);
+        }
+        
+        h1 {
+            color: #00a884;
+            font-size: 24px;
+            margin-bottom: 8px;
+            text-align: center;
+        }
+        
+        .subtitle {
+            color: #8696a0;
+            font-size: 14px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        
+        .form-group {
+            margin: 20px 0;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #e9edef;
+            font-size: 14px;
+        }
+        
+        input {
+            width: 100%;
+            padding: 14px 16px;
+            background: #2a3942;
+            border: 2px solid #374248;
+            border-radius: 10px;
+            color: #e9edef;
+            font-size: 15px;
+            transition: all 0.2s;
+        }
+        
+        input:focus {
+            outline: none;
+            border-color: #00a884;
+            background: #1e2a2f;
+        }
+        
+        .help-text {
+            font-size: 12px;
+            color: #8696a0;
+            margin-top: 6px;
+        }
+        
+        .error-message {
+            background: #3d1a1a;
+            color: #ff6b6b;
+            border: 1px solid #d32f2f;
+            padding: 12px 15px;
+            border-radius: 8px;
+            font-size: 14px;
+            margin-top: 15px;
+            display: none;
+        }
+        
+        .error-message.show {
+            display: block;
+        }
+        
+        button.primary {
+            width: 100%;
+            background: #00a884;
+            color: #111b21;
+            border: none;
+            padding: 14px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: background 0.2s;
+            margin-top: 20px;
+        }
+        
+        button.primary:hover {
+            background: #06cf9c;
+        }
+        
+        button.primary:disabled {
+            background: #374248;
+            color: #8696a0;
+            cursor: not-allowed;
+        }
+        
+        .examples {
+            background: #0f1c22;
+            border: 1px solid #374248;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+        
+        .examples h3 {
+            color: #00a884;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+        
+        .examples ul {
+            list-style: none;
+            padding-left: 0;
+        }
+        
+        .examples li {
+            color: #8696a0;
+            font-size: 12px;
+            margin: 6px 0;
+            font-family: monospace;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #8696a0;
+            border-top-color: #00a884;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <h1>Server Configuration</h1>
+            <p class="subtitle">Enter your WhatsApp Scheduler server URL</p>
+            
+            <form id="configForm">
+                <div class="form-group">
+                    <label for="serverUrl">Server URL</label>
+                    <input 
+                        type="text" 
+                        id="serverUrl" 
+                        placeholder="http://192.168.1.100:3000"
+                        autocomplete="off"
+                        required
+                    >
+                    <div class="help-text">
+                        Enter the full URL including protocol (http:// or https://) and port number
+                    </div>
+                </div>
+                
+                <div id="errorMessage" class="error-message"></div>
+                
+                <button type="submit" class="primary" id="submitBtn">
+                    Connect
+                </button>
+            </form>
+            
+            <div class="examples">
+                <h3>Example URLs:</h3>
+                <ul>
+                    <li>http://192.168.1.100:3000</li>
+                    <li>http://localhost:3000</li>
+                    <li>https://myserver.com:3000</li>
+                    <li>http://10.0.0.5:3000</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const SERVER_KEY = 'whatscheduler_server_url';
+        
+        // Check if server URL is already configured
+        const existingUrl = localStorage.getItem(SERVER_KEY);
+        if (existingUrl) {
+            // Redirect to main app if already configured
+            window.location.href = 'index.html';
+        }
+        
+        const form = document.getElementById('configForm');
+        const serverUrlInput = document.getElementById('serverUrl');
+        const submitBtn = document.getElementById('submitBtn');
+        const errorDiv = document.getElementById('errorMessage');
+        
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            let serverUrl = serverUrlInput.value.trim();
+            
+            // Remove trailing slash for consistency
+            if (serverUrl.endsWith('/')) {
+                serverUrl = serverUrl.slice(0, -1);
+            }
+            
+            // Validate URL format
+            try {
+                new URL(serverUrl);
+            } catch (err) {
+                showError('Invalid URL format. Please include http:// or https://');
+                return;
+            }
+            
+            // Disable button and show loading
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="loading"></span>Connecting...';
+            hideError();
+            
+            try {
+                // Test connection with 5 second timeout
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000);
+                
+                const response = await fetch(`${serverUrl}/api/status`, {
+                    method: 'GET',
+                    headers: { 'Accept': 'application/json' },
+                    signal: controller.signal
+                });
+                
+                clearTimeout(timeoutId);
+                
+                if (response.ok) {
+                    // Connection successful - save and redirect
+                    localStorage.setItem(SERVER_KEY, serverUrl);
+                    submitBtn.innerHTML = 'Connected! Redirecting...';
+                    
+                    setTimeout(() => {
+                        window.location.href = 'index.html';
+                    }, 500);
+                } else {
+                    throw new Error(`Server returned ${response.status}`);
+                }
+            } catch (err) {
+                if (err.name === 'AbortError') {
+                    showError('Connection timeout. Please check your server URL and ensure the server is running.');
+                } else if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
+                    showError('Could not connect to server. Please check:\n• Server URL is correct\n• Server is running\n• Device is on the same network (for local IPs)');
+                } else {
+                    showError(`Could not connect: ${err.message}`);
+                }
+                
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = 'Connect';
+            }
+        });
+        
+        function showError(message) {
+            errorDiv.textContent = message;
+            errorDiv.classList.add('show');
+        }
+        
+        function hideError() {
+            errorDiv.classList.remove('show');
+        }
+        
+        // Allow Enter key to submit
+        serverUrlInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                form.dispatchEvent(new Event('submit'));
+            }
+        });
+    </script>
+</body>
+</html>
+
