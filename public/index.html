@@ -7,595 +7,217 @@
     <title>WhatsApp Scheduler</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #0b141a;
-            color: #e9edef;
-            min-height: 100vh;
-        }
-        
-        .container {
-            max-width: 900px;
-            margin: 0 auto;
-            padding: 15px;
-        }
-        
-        @media (min-width: 768px) {
-            .container { padding: 30px; }
-        }
-        
-        .card {
-            background: #1e2a2f;
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 20px rgba(0,0,0,0.4);
-        }
-        
-        h1 {
-            color: #00a884;
-            font-size: 24px;
-            margin-bottom: 8px;
-        }
-        
-        h2 {
-            color: #00a884;
-            font-size: 20px;
-            margin: 20px 0 15px;
-        }
-        
-        .subtitle {
-            color: #8696a0;
-            font-size: 14px;
-            margin-bottom: 20px;
-        }
-        
-        .status {
-            padding: 12px 15px;
-            border-radius: 8px;
-            font-weight: 500;
-            font-size: 14px;
-        }
-        
-        .status.ready {
-            background: #0c4a3e;
-            color: #25d366;
-            border: 1px solid #25d366;
-        }
-        
-        .status.waiting {
-            background: #3d3014;
-            color: #ffb74d;
-            border: 1px solid #f9a825;
-        }
-        
-        .qr-code {
-            text-align: center;
-            padding: 20px;
-            background: #0b141a;
-            border-radius: 8px;
-        }
-        
-        .qr-code img {
-            max-width: 100%;
-            height: auto;
-            max-height: 300px;
-            border: 2px solid #00a884;
-            border-radius: 8px;
-            background: white;
-            padding: 10px;
-        }
-        
-        .search-container {
-            position: relative;
-            margin-bottom: 15px;
-        }
-        
-        .search-header {
-            display: flex;
-            gap: 10px;
-            align-items: stretch;
-        }
-        
-        .search-box {
-            flex: 1;
-            padding: 14px 16px;
-            background: #2a3942;
-            border: 2px solid #374248;
-            border-radius: 10px;
-            color: #e9edef;
-            font-size: 15px;
-            transition: all 0.2s;
-        }
-        
-        .refresh-btn {
-            background: #374248;
-            color: #e9edef;
-            border: none;
-            padding: 14px 20px;
-            border-radius: 10px;
-            cursor: pointer;
-            font-size: 18px;
-            transition: all 0.2s;
-            min-width: 52px;
-        }
-        
-        .refresh-btn:hover {
-            background: #4a5b66;
-        }
-        
-        .refresh-btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-        
-        .refresh-btn.spinning {
-            animation: spin 1s linear;
-        }
-        
-        @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-        }
-        
-        .search-box:focus {
-            outline: none;
-            border-color: #00a884;
-            background: #1e2a2f;
-        }
-        
-        .search-results {
-            position: absolute;
-            top: 100%;
-            left: 0;
-            right: 0;
-            background: #1e2a2f;
-            border: 1px solid #374248;
-            border-radius: 8px;
-            margin-top: 8px;
-            max-height: 400px;
-            overflow-y: auto;
-            z-index: 1000;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-        }
-        
-        .search-results:empty {
-            display: none;
-        }
-        
-        .search-result-item {
-            padding: 12px 16px;
-            cursor: pointer;
-            border-bottom: 1px solid #374248;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            transition: background 0.2s;
-        }
-        
-        .search-result-item:last-child {
-            border-bottom: none;
-        }
-        
-        .search-result-item:hover {
-            background: #2a3942;
-        }
-        
-        .search-result-item.selected {
-            background: #0c4a3e;
-            border-left: 3px solid #00a884;
-        }
-        
-        .result-info {
-            flex: 1;
-            min-width: 0;
-        }
-        
-        .result-name {
-            font-size: 14px;
-            font-weight: 500;
-            margin-bottom: 2px;
-        }
-        
-        .result-number {
-            font-size: 12px;
-            color: #8696a0;
-        }
-        
-        .result-icon {
-            margin-right: 8px;
-        }
-        
-        .star-btn {
-            background: transparent;
-            border: none;
-            color: #8696a0;
-            cursor: pointer;
-            font-size: 18px;
-            padding: 4px 8px;
-            transition: color 0.2s;
-        }
-        
-        .star-btn:hover, .star-btn.starred {
-            color: #ffd700;
-        }
-        
-        .favorites-section {
-            margin-bottom: 15px;
-        }
-        
-        .favorite-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 12px;
-            background: #0f1c22;
-            border: 1px solid #374248;
-            border-radius: 8px;
-            margin-bottom: 8px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        
-        .favorite-info {
-            flex: 1;
-            min-width: 0;
-        }
-        
-        .favorite-name {
-            font-size: 14px;
-            font-weight: 500;
-            margin-bottom: 2px;
-        }
-        
-        .favorite-number {
-            font-size: 12px;
-            color: #8696a0;
-        }
-        
-        .favorite-item:hover {
-            background: #1a2a30;
-            border-color: #00a884;
-        }
-        
-        .favorite-item.selected {
-            border-color: #00a884;
-            background: #0c4a3e;
-        }
-        
-        .remove-fav {
-            background: #d32f2f;
-            color: white;
-            border: none;
-            padding: 6px 10px;
-            border-radius: 6px;
-            font-size: 12px;
-            cursor: pointer;
-        }
-        
-        .form-group {
-            margin: 15px 0;
-        }
-        
-        label {
-            display: block;
-            margin-bottom: 6px;
-            font-weight: 500;
-            color: #e9edef;
-            font-size: 14px;
-        }
-        
-        .help-text {
-            font-size: 12px;
-            color: #8696a0;
-            margin-top: 4px;
-        }
-        
-        input, textarea {
-            width: 100%;
-            padding: 12px;
-            border: 1px solid #2a3942;
-            border-radius: 8px;
-            font-size: 14px;
-            background: #2a3942;
-            color: #e9edef;
-            font-family: inherit;
-        }
-        
-        input:focus, textarea:focus {
-            outline: none;
-            border-color: #00a884;
-        }
-        
-        textarea {
-            min-height: 80px;
-            resize: vertical;
-        }
-        
-        .messages-container {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-        
-        .message-input-wrapper {
-            display: flex;
-            gap: 8px;
-            align-items: start;
-        }
-        
-        .message-input-wrapper span {
-            color: #8696a0;
-            padding: 12px 8px;
-            font-weight: bold;
-            min-width: 30px;
-        }
-        
-        .message-input-wrapper textarea {
-            flex: 1;
-        }
-        
-        .remove-msg-btn {
-            background: #d32f2f;
-            color: white;
-            border: none;
-            padding: 10px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 18px;
-            min-width: 40px;
-        }
-        
-        .add-message-btn {
-            background: #374248;
-            color: #e9edef;
-            border: none;
-            padding: 10px 16px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 14px;
-            margin-top: 8px;
-        }
-        
-        .add-message-btn:hover {
-            background: #4a5b66;
-        }
-        
-        /* Custom 24h time picker */
-        .time-picker-wrapper {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-        }
-        
-        @media (max-width: 480px) {
-            .time-picker-wrapper {
-                grid-template-columns: 1fr;
-            }
-        }
-        
-        .custom-time-picker {
-            display: flex;
-            gap: 8px;
-            align-items: center;
-            background: #2a3942;
-            border: 1px solid #2a3942;
-            border-radius: 8px;
-            padding: 8px 12px;
-        }
-        
-        .custom-time-picker:focus-within {
-            border-color: #00a884;
-        }
-        
-        .time-input {
-            width: 50px;
-            background: transparent;
-            border: none;
-            color: #e9edef;
-            font-size: 16px;
-            font-weight: 500;
-            text-align: center;
-            padding: 4px;
-        }
-        
-        .time-input:focus {
-            outline: none;
-            background: #374248;
-            border-radius: 4px;
-        }
-        
-        .time-separator {
-            color: #8696a0;
-            font-size: 18px;
-            font-weight: bold;
-        }
-        
-        button.primary {
-            width: 100%;
-            background: #00a884;
-            color: #111b21;
-            border: none;
-            padding: 14px 24px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 16px;
-            font-weight: 600;
-            transition: background 0.2s;
-        }
-        
-        button.primary:hover {
-            background: #06cf9c;
-        }
-        
-        .batch-group {
-            background: #2a3942;
-            border: 1px solid #374248;
-            border-radius: 8px;
-            margin-bottom: 15px;
-            overflow: hidden;
-        }
-        
-        .batch-header {
-            background: #0f1c22;
-            padding: 12px 15px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px solid #374248;
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-        
-        .batch-header strong {
-            color: #00a884;
-            font-size: 14px;
-        }
-        
-        .scheduled-item {
-            padding: 12px 15px;
-            border-bottom: 1px solid #374248;
-        }
-        
-        .scheduled-item:last-child {
-            border-bottom: none;
-        }
-        
-        .scheduled-info {
-            margin-bottom: 8px;
-        }
-        
-        .message-text {
-            color: #e9edef;
-            margin-bottom: 6px;
-            word-wrap: break-word;
-            font-size: 14px;
-        }
-        
-        .scheduled-actions {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-            align-items: center;
-        }
-        
-        .btn-small {
-            padding: 6px 12px;
-            font-size: 13px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: 500;
-        }
-        
-        .btn-delete {
-            background: #d32f2f;
-            color: white;
-        }
-        
-        .btn-save {
-            background: #00a884;
-            color: #111b21;
-        }
-        
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0b141a; color: #e9edef; min-height: 100vh; }
+        .container { max-width: 900px; margin: 0 auto; padding: 15px; }
+        @media(min-width:768px){ .container { padding: 30px; } }
+        .card { background: #1e2a2f; border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 20px rgba(0,0,0,.4); }
+        h1 { color: #00a884; font-size: 24px; margin-bottom: 6px; }
+        h2 { color: #00a884; font-size: 20px; margin: 20px 0 15px; }
+        .subtitle { color: #8696a0; font-size: 14px; margin-bottom: 20px; }
+        .header-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+        .logout-btn { background: #374248; color: #e9edef; border: none; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 13px; white-space: nowrap; }
+        .logout-btn:hover { background: #4a5b66; }
+
+        /* Status */
+        .status { padding: 12px 15px; border-radius: 8px; font-weight: 500; font-size: 14px; }
+        .status.ready { background: #0c4a3e; color: #25d366; border: 1px solid #25d366; }
+        .status.waiting { background: #3d3014; color: #ffb74d; border: 1px solid #f9a825; }
+        .qr-code { text-align: center; padding: 20px; background: #0b141a; border-radius: 8px; }
+        .qr-code img { max-width: 100%; max-height: 300px; border: 2px solid #00a884; border-radius: 8px; background: white; padding: 10px; }
+
+        /* Search */
+        .search-container { position: relative; margin-bottom: 15px; }
+        .search-header { display: flex; gap: 10px; align-items: stretch; }
+        .search-box { flex: 1; padding: 14px 16px; background: #2a3942; border: 2px solid #374248; border-radius: 10px; color: #e9edef; font-size: 15px; transition: all .2s; }
+        .search-box:focus { outline: none; border-color: #00a884; background: #1e2a2f; }
+        .refresh-btn { background: #374248; color: #e9edef; border: none; padding: 14px 16px; border-radius: 10px; cursor: pointer; font-size: 14px; transition: all .2s; white-space: nowrap; }
+        .refresh-btn:hover { background: #4a5b66; }
+        .refresh-btn:disabled { opacity: .6; cursor: not-allowed; }
+        @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+
+        .search-results { position: absolute; top: 100%; left: 0; right: 0; background: #1e2a2f; border: 1px solid #374248; border-radius: 8px; margin-top: 8px; max-height: 400px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 20px rgba(0,0,0,.5); }
+        .search-results:empty { display: none; }
+        .search-result-item { padding: 12px 16px; cursor: pointer; border-bottom: 1px solid #374248; display: flex; justify-content: space-between; align-items: center; transition: background .2s; }
+        .search-result-item:last-child { border-bottom: none; }
+        .search-result-item:hover { background: #2a3942; }
+        .search-result-item.selected { background: #0c4a3e; border-left: 3px solid #00a884; }
+        .result-info { flex: 1; min-width: 0; }
+        .result-name { font-size: 14px; font-weight: 500; margin-bottom: 2px; }
+        .result-number { font-size: 12px; color: #8696a0; }
+        .star-btn { background: transparent; border: none; color: #8696a0; cursor: pointer; font-size: 18px; padding: 4px 8px; transition: color .2s; }
+        .star-btn:hover, .star-btn.starred { color: #ffd700; }
+
+        /* Favorites */
+        .favorite-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #0f1c22; border: 1px solid #374248; border-radius: 8px; margin-bottom: 8px; cursor: pointer; transition: all .2s; }
+        .favorite-item:hover { background: #1a2a30; border-color: #00a884; }
+        .favorite-item.selected { border-color: #00a884; background: #0c4a3e; }
+        .favorite-info { flex: 1; min-width: 0; }
+        .favorite-name { font-size: 14px; font-weight: 500; margin-bottom: 2px; }
+        .favorite-number { font-size: 12px; color: #8696a0; }
+        .remove-fav { background: #d32f2f; color: white; border: none; padding: 6px 10px; border-radius: 6px; font-size: 12px; cursor: pointer; }
+
+        /* Form */
+        .form-group { margin: 15px 0; }
+        label { display: block; margin-bottom: 6px; font-weight: 500; color: #e9edef; font-size: 14px; }
+        .help-text { font-size: 12px; color: #8696a0; margin-top: 4px; }
+        input, textarea { width: 100%; padding: 12px; border: 1px solid #2a3942; border-radius: 8px; font-size: 14px; background: #2a3942; color: #e9edef; font-family: inherit; }
+        input:focus, textarea:focus { outline: none; border-color: #00a884; }
+        textarea { min-height: 80px; resize: vertical; }
+
+        /* Messages */
+        .messages-container { display: flex; flex-direction: column; gap: 10px; }
+        .message-input-wrapper { display: flex; gap: 8px; align-items: start; }
+        .message-input-wrapper span { color: #8696a0; padding: 12px 8px; font-weight: bold; min-width: 26px; }
+        .message-input-wrapper textarea { flex: 1; }
+        .remove-msg-btn { background: #d32f2f; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-size: 16px; min-width: 40px; }
+        .add-message-btn { background: #374248; color: #e9edef; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-size: 14px; margin-top: 8px; }
+        .add-message-btn:hover { background: #4a5b66; }
+
+        /* File attachment */
+        .file-attach-area { border: 2px dashed #374248; border-radius: 10px; padding: 16px; text-align: center; cursor: pointer; transition: all .2s; margin-top: 12px; }
+        .file-attach-area:hover { border-color: #00a884; background: #0f1c22; }
+        .file-attach-area.has-file { border-style: solid; border-color: #00a884; background: #0c4a3e; }
+        .file-attach-area .icon { font-size: 24px; margin-bottom: 6px; }
+        .file-attach-area p { font-size: 13px; color: #8696a0; }
+        .file-attach-area.has-file p { color: #25d366; }
+        .file-name-display { font-size: 12px; color: #8696a0; margin-top: 4px; word-break: break-all; }
+        .remove-file-btn { background: transparent; border: none; color: #d32f2f; cursor: pointer; font-size: 12px; text-decoration: underline; margin-top: 4px; }
+        #fileInput { display: none; }
+
+        /* Schedule time */
+        .schedule-mode-tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+        .tab-btn { flex: 1; background: #374248; color: #8696a0; border: 2px solid transparent; padding: 10px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 500; transition: all .2s; }
+        .tab-btn.active { background: #0c4a3e; color: #00a884; border-color: #00a884; }
+        .time-picker-wrapper { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        @media(max-width:480px){ .time-picker-wrapper { grid-template-columns: 1fr; } }
+        .custom-time-picker { display: flex; gap: 8px; align-items: center; background: #2a3942; border: 1px solid #2a3942; border-radius: 8px; padding: 8px 12px; }
+        .custom-time-picker:focus-within { border-color: #00a884; }
+        .time-input { width: 50px; background: transparent; border: none; color: #e9edef; font-size: 16px; font-weight: 500; text-align: center; padding: 4px; }
+        .time-input:focus { outline: none; background: #374248; border-radius: 4px; }
+        .time-separator { color: #8696a0; font-size: 18px; font-weight: bold; }
+        .duration-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        .duration-field { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+        .duration-field input[type=number] { width: 70px; text-align: center; }
+        .duration-field label { font-size: 11px; color: #8696a0; margin: 0; }
+        .computed-time { font-size: 12px; color: #8696a0; margin-top: 8px; }
+        .computed-time strong { color: #00a884; }
+
+        button.primary { width: 100%; background: #00a884; color: #111b21; border: none; padding: 14px 24px; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: 600; transition: background .2s; }
+        button.primary:hover { background: #06cf9c; }
+
+        /* Scheduled list */
+        .batch-group { background: #2a3942; border: 1px solid #374248; border-radius: 8px; margin-bottom: 15px; overflow: hidden; }
+        .batch-header { background: #0f1c22; padding: 12px 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #374248; flex-wrap: wrap; gap: 8px; }
+        .batch-header strong { color: #00a884; font-size: 14px; }
+        .batch-header .contact-label { font-size: 12px; color: #8696a0; }
+        .scheduled-item { padding: 12px 15px; border-bottom: 1px solid #374248; }
+        .scheduled-item:last-child { border-bottom: none; }
+        .message-text { color: #e9edef; margin-bottom: 6px; word-wrap: break-word; font-size: 14px; }
+        .file-badge { display: inline-block; background: #1e3a5f; color: #64b5f6; border: 1px solid #1565c0; border-radius: 4px; padding: 2px 8px; font-size: 11px; margin-bottom: 6px; }
+        .scheduled-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+        .btn-small { padding: 6px 12px; font-size: 13px; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; }
+        .btn-delete { background: #d32f2f; color: white; }
+        .btn-edit   { background: #374248; color: #e9edef; }
+        .btn-edit:hover { background: #4a5b66; }
+
+        /* Edit modal */
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 2000; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .modal-overlay.hidden { display: none; }
+        .modal { background: #1e2a2f; border-radius: 12px; padding: 24px; width: 100%; max-width: 500px; box-shadow: 0 8px 40px rgba(0,0,0,.6); }
+        .modal h3 { color: #00a884; margin-bottom: 16px; font-size: 18px; }
+        .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+        .modal-actions button { flex: 1; }
+        .btn-cancel { background: #374248; color: #e9edef; border: none; padding: 12px; border-radius: 8px; cursor: pointer; font-size: 14px; }
+        .btn-save { background: #00a884; color: #111b21; border: none; padding: 12px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; }
+
+        /* Misc */
+        .selected-contact-display { padding: 10px 12px; background: #0c4a3e; border: 1px solid #00a884; border-radius: 8px; margin-top: 10px; display: flex; justify-content: space-between; align-items: center; }
+        .selected-contact-display .name { color: #25d366; font-weight: 500; }
+        .clear-selection { background: transparent; color: #e9edef; border: none; cursor: pointer; font-size: 18px; padding: 4px; }
         .hidden { display: none; }
-        
+        small { color: #8696a0; font-size: 11px; }
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #0b141a; }
         ::-webkit-scrollbar-thumb { background: #374248; border-radius: 4px; }
-        
-        small {
-            color: #8696a0;
-            font-size: 11px;
-        }
-        
-        .selected-contact-display {
-            padding: 10px 12px;
-            background: #0c4a3e;
-            border: 1px solid #00a884;
-            border-radius: 8px;
-            margin-top: 10px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .selected-contact-display .name {
-            color: #25d366;
-            font-weight: 500;
-        }
-        
-        .clear-selection {
-            background: transparent;
-            color: #e9edef;
-            border: none;
-            cursor: pointer;
-            font-size: 18px;
-            padding: 4px;
-        }
     </style>
 </head>
 <body>
-    <div class="container">
+<div class="container">
+    <div class="card">
+        <div class="header-row">
+            <div>
+                <h1>WhatsApp Scheduler</h1>
+                <p class="subtitle">Real-time scheduling with precise delays</p>
+            </div>
+            <button class="logout-btn hidden" id="logoutBtn" onclick="logout()">🔒 Logout</button>
+        </div>
+        <div id="status" class="status waiting">Connecting...</div>
+        <div id="qrSection" class="qr-code hidden">
+            <h3 style="color:#e9edef;margin-bottom:10px">Scan with WhatsApp</h3>
+            <p style="color:#8696a0;margin:10px 0;font-size:14px">Settings → Linked Devices → Link Device</p>
+            <img id="qrImage" src="" alt="QR Code">
+        </div>
+    </div>
+
+    <div id="scheduleForm" class="hidden">
         <div class="card">
-            <h1>WhatsApp Scheduler</h1>
-            <p class="subtitle">Real-time scheduling with precise delays</p>
-
-            <div id="status" class="status waiting">
-                Connecting...
-            </div>
-
-            <div id="qrSection" class="qr-code hidden">
-                <h3 style="color: #e9edef; margin-bottom: 10px;">Scan with WhatsApp</h3>
-                <p style="color: #8696a0; margin: 10px 0; font-size: 14px;">Settings → Linked Devices → Link Device</p>
-                <img id="qrImage" src="" alt="QR Code">
-            </div>
+            <h2>Favorites</h2>
+            <div id="favoritesSection"></div>
         </div>
 
-        <div id="scheduleForm" class="hidden">
-            <div class="card">
-                <h2>Favorites</h2>
-                <div id="favoritesSection" class="favorites-section"></div>
+        <div class="card">
+            <h2>Schedule Messages</h2>
+
+            <!-- Contact search -->
+            <div class="form-group">
+                <label>Search contacts or groups</label>
+                <div class="search-container">
+                    <div class="search-header">
+                        <input type="text" id="searchBox" class="search-box" placeholder="Type to search..." autocomplete="off">
+                        <button class="refresh-btn" id="refreshBtn">↻ Refresh</button>
+                    </div>
+                    <div id="searchResults" class="search-results"></div>
+                </div>
+                <div id="selectedContactDisplay"></div>
             </div>
-            
-            <div class="card">
-                <h2>Schedule Messages</h2>
-                
-                <div class="form-group">
-                    <label>Search contacts or groups</label>
-                    <div class="search-container">
-                        <div class="search-header">
-                            <input 
-                                type="text" 
-                                id="searchBox" 
-                                class="search-box" 
-                                placeholder="Type to search..."
-                                autocomplete="off"
-                            >
-                            <button class="refresh-btn" id="refreshBtn" title="Refresh contacts">
-                                Refresh
-                            </button>
-                        </div>
-                        <div id="searchResults" class="search-results"></div>
+
+            <!-- Messages -->
+            <div class="form-group">
+                <label>Messages</label>
+                <div id="messagesContainer" class="messages-container">
+                    <div class="message-input-wrapper">
+                        <span>1.</span>
+                        <textarea class="message-input" placeholder="Type your message..."></textarea>
                     </div>
-                    <div id="selectedContactDisplay"></div>
+                </div>
+                <button class="add-message-btn" onclick="addMessageInput()">+ Add Another Message</button>
+                <div class="help-text">Multiple messages are sent with realistic typing delays (3–8 s apart)</div>
+            </div>
+
+            <!-- File attachment -->
+            <div class="form-group">
+                <label>Attach File (optional)</label>
+                <input type="file" id="fileInput" accept="*/*">
+                <div class="file-attach-area" id="fileAttachArea" onclick="document.getElementById('fileInput').click()">
+                    <div class="icon">📎</div>
+                    <p>Click to attach a file</p>
+                    <p style="font-size:11px;color:#8696a0;margin-top:4px">Images, videos, documents — max 25 MB</p>
+                </div>
+                <div id="fileInfo" class="hidden">
+                    <div class="file-name-display" id="fileName"></div>
+                    <button class="remove-file-btn" onclick="removeFile()">✕ Remove file</button>
+                </div>
+            </div>
+
+            <!-- Schedule time -->
+            <div class="form-group">
+                <label>When to send</label>
+                <div class="schedule-mode-tabs">
+                    <button class="tab-btn active" id="tabDatetime" onclick="setScheduleMode('datetime')">📅 Specific date & time</button>
+                    <button class="tab-btn" id="tabDuration" onclick="setScheduleMode('duration')">⏱ In how long?</button>
                 </div>
 
-                <div class="form-group">
-                    <label>Messages</label>
-                    <div id="messagesContainer" class="messages-container">
-                        <div class="message-input-wrapper">
-                            <span>1.</span>
-                            <textarea class="message-input" placeholder="Type your message..."></textarea>
-                        </div>
-                    </div>
-                    <button class="add-message-btn" onclick="addMessageInput()">+ Add Another Message</button>
-                    <div class="help-text">Multiple messages sent with realistic typing delays (3-8 seconds apart)</div>
-                </div>
-
-                <div class="form-group">
-                    <label>Schedule Date & Time (24-hour format)</label>
+                <div id="datetimePanel">
                     <div class="time-picker-wrapper">
                         <input type="date" id="scheduleDate">
                         <div class="custom-time-picker">
@@ -604,506 +226,616 @@
                             <input type="number" id="minuteInput" class="time-input" min="0" max="59" value="00" placeholder="00">
                         </div>
                     </div>
-                    <div class="help-text">Hour: 00-23 (military time)</div>
+                    <div class="help-text">24-hour format (00–23)</div>
                 </div>
 
-                <button class="primary" onclick="scheduleMessage()">Schedule Message(s)</button>
+                <div id="durationPanel" class="hidden">
+                    <div class="duration-row">
+                        <div class="duration-field">
+                            <input type="number" id="durDays" min="0" max="365" value="0" oninput="updateComputedTime()">
+                            <label>days</label>
+                        </div>
+                        <div class="duration-field">
+                            <input type="number" id="durHours" min="0" max="23" value="0" oninput="updateComputedTime()">
+                            <label>hours</label>
+                        </div>
+                        <div class="duration-field">
+                            <input type="number" id="durMinutes" min="0" max="59" value="30" oninput="updateComputedTime()">
+                            <label>minutes</label>
+                        </div>
+                    </div>
+                    <div class="computed-time" id="computedTime"></div>
+                </div>
             </div>
 
-            <div id="scheduledList" class="card hidden">
-                <h2>Scheduled Messages</h2>
-                <div id="messagesList"></div>
-            </div>
+            <button class="primary" onclick="scheduleMessage()">Schedule Message(s)</button>
+        </div>
+
+        <div id="scheduledList" class="card hidden">
+            <h2>Scheduled Messages</h2>
+            <div id="messagesList"></div>
         </div>
     </div>
+</div>
 
-    <script>
-        const SERVER_KEY = 'whatscheduler_server_url';
-        let BASE_URL = '';
-        let ws;
-        let contacts = [];
-        let favorites = [];
-        let selectedContact = null;
+<!-- Edit Modal -->
+<div class="modal-overlay hidden" id="editModal">
+    <div class="modal">
+        <h3>✏️ Edit Message</h3>
+        <input type="hidden" id="editMsgId">
+        <div class="form-group">
+            <label>Message text</label>
+            <textarea id="editMsgText" rows="4"></textarea>
+        </div>
+        <div class="form-group">
+            <label>Scheduled time</label>
+            <div class="time-picker-wrapper">
+                <input type="date" id="editDate">
+                <div class="custom-time-picker">
+                    <input type="number" id="editHour" class="time-input" min="0" max="23">
+                    <span class="time-separator">:</span>
+                    <input type="number" id="editMinute" class="time-input" min="0" max="59">
+                </div>
+            </div>
+        </div>
+        <div class="modal-actions">
+            <button class="btn-cancel" onclick="closeEditModal()">Cancel</button>
+            <button class="btn-save" onclick="saveEditedMessage()">Save Changes</button>
+        </div>
+    </div>
+</div>
 
-        // Get contact phone number
-        function getContactNumber(contact) {
-            // Groups don't have phone numbers
-            if (contact.isGroup) return '';
-            
-            // If contact has number property, use it
-            if (contact.number) return contact.number;
-            
-            // Extract from ID using regex
-            // ID format: "5511999999999@c.us"
-            const match = contact.id.match(/(\d+)@/);
-            return match ? match[1] : '';
-        }
+<script>
+// ─── Constants & State ────────────────────────────────────────────────────────
+const SERVER_KEY = 'whatscheduler_server_url';
+const AUTH_KEY   = 'whatscheduler_auth_token';
+let BASE_URL = '';
+let authToken = '';
+let ws = null;
+let contacts = [];
+let favorites = [];
+let selectedContact = null;
+let scheduleMode = 'datetime';
+let attachedFile = null; // { base64, name, type }
+let statusPollInterval = null;
 
-        // Format time inputs
-        document.addEventListener('DOMContentLoaded', () => {
-            // Check for server URL configuration
-            BASE_URL = localStorage.getItem(SERVER_KEY);
-            
-            // If no server URL configured, redirect to config
-            if (!BASE_URL) {
-                window.location.href = 'config.html';
-                return;
-            }
-            
-            // Initialize the app
-            initializeApp();
+// ─── API Helper ───────────────────────────────────────────────────────────────
+async function api(method, path, body) {
+    const opts = {
+        method,
+        headers: { 'Content-Type': 'application/json', 'x-auth-token': authToken }
+    };
+    if (body) opts.body = JSON.stringify(body);
+    const res = await fetch(`${BASE_URL}${path}`, opts);
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 401) {
+        localStorage.removeItem(AUTH_KEY);
+        window.location.href = 'login.html';
+        throw new Error('Unauthorized');
+    }
+    return { ok: res.ok, status: res.status, data };
+}
+
+// ─── Boot ─────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', async () => {
+    BASE_URL = localStorage.getItem(SERVER_KEY) || '';
+    if (!BASE_URL) { window.location.href = 'config.html'; return; }
+    authToken = localStorage.getItem(AUTH_KEY) || '';
+
+    // Check auth
+    try {
+        const res = await fetch(`${BASE_URL}/api/auth/check`, {
+            headers: { 'x-auth-token': authToken }
         });
-        
-        function initializeApp() {
-            const hourInput = document.getElementById('hourInput');
-            const minuteInput = document.getElementById('minuteInput');
-
-            hourInput.addEventListener('input', (e) => {
-                let val = parseInt(e.target.value) || 0;
-                if (val < 0) val = 0;
-                if (val > 23) val = 23;
-                e.target.value = val.toString().padStart(2, '0');
-            });
-
-            minuteInput.addEventListener('input', (e) => {
-                let val = parseInt(e.target.value) || 0;
-                if (val < 0) val = 0;
-                if (val > 59) val = 59;
-                e.target.value = val.toString().padStart(2, '0');
-            });
-
-            // Set current time
-            const now = new Date();
-            document.getElementById('scheduleDate').valueAsDate = now;
-            hourInput.value = now.getHours().toString().padStart(2, '0');
-            minuteInput.value = now.getMinutes().toString().padStart(2, '0');
-            
-            // Attach refresh button handler
-            document.getElementById('refreshBtn').addEventListener('click', refreshContacts);
-            
-            // Initialize WebSocket and check status
-            connectWebSocket();
-            
-            fetch(`${BASE_URL}/api/status`)
-                .then(r => r.json())
-                .then(data => {
-                    if (data.isReady) {
-                        updateStatus(true);
-                    } else if (data.hasQR) {
-                        showQR(data.qrCode);
-                    }
-                });
+        const data = await res.json();
+        if (data.required && !data.valid) {
+            window.location.href = 'login.html';
+            return;
         }
-
-        // Refresh contacts
-        async function refreshContacts() {
-            const btn = document.getElementById('refreshBtn');
-            
-            // Add spinning animation
-            btn.classList.add('spinning');
-            btn.disabled = true;
-            
-            try {
-                // Force refresh by adding query parameter
-                const res = await fetch(`${BASE_URL}/api/contacts?refresh=true`);
-                contacts = await res.json();
-                
-                // Update UI - force update even if dropdown is open
-                const currentQuery = document.getElementById('searchBox').value;
-                renderSearchResults(currentQuery, true);
-                
-                // Success feedback
-                btn.textContent = 'Done';
-                setTimeout(() => {
-                    btn.textContent = 'Refresh';
-                    btn.classList.remove('spinning');
-                    btn.disabled = false;
-                }, 1000);
-            } catch (e) {
-                console.error('Failed to refresh:', e);
-                btn.classList.remove('spinning');
-                btn.disabled = false;
-            }
+        if (data.required) {
+            document.getElementById('logoutBtn').classList.remove('hidden');
         }
+    } catch(e) {
+        // Server unreachable; try anyway
+    }
 
-        // WebSocket connection
-        function connectWebSocket() {
-            // Convert HTTP URL to WebSocket URL
-            const wsUrl = BASE_URL.replace('http://', 'ws://').replace('https://', 'wss://');
-            ws = new WebSocket(wsUrl);
+    initDateDefaults();
+    document.getElementById('refreshBtn').addEventListener('click', refreshContacts);
+    connectWebSocket();
 
-            ws.onopen = () => console.log('WebSocket connected');
+    // HTTP polling fallback: if WS is slow or missed, keep polling
+    statusPollInterval = setInterval(pollStatus, 4000);
+    pollStatus();
+});
 
-            ws.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                
-                switch(data.type) {
-                    case 'qr':
-                        showQR(data.data);
-                        break;
-                    case 'ready':
-                        updateStatus(true);
-                        break;
-                    case 'contacts_progress':
-                        updateContactsProgress(data.data.current, data.data.total);
-                        break;
-                    case 'contacts':
-                        contacts = data.data;
-                        renderSearchResults();
-                        // Update status to show connected after contacts are loaded
-                        const statusDiv = document.getElementById('status');
-                        statusDiv.className = 'status ready';
-                        statusDiv.textContent = `WhatsApp connected (${contacts.length} contacts loaded)`;
-                        break;
-                    case 'favorites':
-                        favorites = data.data;
-                        renderFavorites();
-                        break;
-                    case 'scheduled':
-                        renderScheduledMessages(data.data);
-                        break;
-                    case 'disconnected':
-                        updateStatus(false);
-                        break;
-                }
-            };
-
-            ws.onclose = () => {
-                console.log('WebSocket disconnected, reconnecting...');
-                setTimeout(connectWebSocket, 3000);
-            };
+async function pollStatus() {
+    try {
+        const res = await fetch(`${BASE_URL}/api/status`);
+        const data = await res.json();
+        if (data.isReady && !document.getElementById('scheduleForm').classList.contains('hidden') === false) {
+            // Already shown — no action needed
         }
-
-        function showQR(qrData) {
-            document.getElementById('qrSection').classList.remove('hidden');
-            document.getElementById('qrImage').src = qrData;
-            document.getElementById('scheduleForm').classList.add('hidden');
+        if (data.isReady) {
+            handleReady();
+        } else if (data.hasQR && data.qrCode) {
+            showQR(data.qrCode);
         }
+    } catch(e) {}
+}
 
-        function updateStatus(ready, showConnecting = true) {
-            const statusDiv = document.getElementById('status');
-            if (ready) {
-                statusDiv.className = 'status ready';
-                statusDiv.textContent = 'WhatsApp connected';
-                document.getElementById('qrSection').classList.add('hidden');
-                document.getElementById('scheduleForm').classList.remove('hidden');
-                if (showConnecting) {
-                    loadInitialData();
-                }
-            } else {
-                statusDiv.className = 'status waiting';
-                statusDiv.textContent = 'Connecting...';
-            }
+function handleReady() {
+    if (document.getElementById('scheduleForm').classList.contains('hidden')) {
+        updateStatus(true, true);
+    }
+}
+
+function initDateDefaults() {
+    const now = new Date();
+    document.getElementById('scheduleDate').valueAsDate = now;
+    document.getElementById('hourInput').value = now.getHours().toString().padStart(2,'0');
+    document.getElementById('minuteInput').value = now.getMinutes().toString().padStart(2,'0');
+    updateComputedTime();
+
+    document.getElementById('hourInput').addEventListener('input', e => {
+        let v = parseInt(e.target.value)||0;
+        e.target.value = Math.min(23, Math.max(0, v)).toString().padStart(2,'0');
+    });
+    document.getElementById('minuteInput').addEventListener('input', e => {
+        let v = parseInt(e.target.value)||0;
+        e.target.value = Math.min(59, Math.max(0, v)).toString().padStart(2,'0');
+    });
+}
+
+// ─── Auth ─────────────────────────────────────────────────────────────────────
+async function logout() {
+    try { await api('POST', '/api/auth/logout'); } catch(e) {}
+    localStorage.removeItem(AUTH_KEY);
+    window.location.href = 'login.html';
+}
+
+// ─── WebSocket ────────────────────────────────────────────────────────────────
+function connectWebSocket() {
+    const wsUrl = BASE_URL.replace('https://', 'wss://').replace('http://', 'ws://');
+    ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => console.log('WS connected');
+
+    ws.onmessage = ({ data }) => {
+        let msg;
+        try { msg = JSON.parse(data); } catch(e) { return; }
+        switch(msg.type) {
+            case 'qr':       showQR(msg.data); break;
+            case 'ready':    updateStatus(true); break;
+            case 'contacts_progress': updateProgress(msg.data.current, msg.data.total); break;
+            case 'contacts': contacts = msg.data; renderSearchResults(); updateStatusContacts(); break;
+            case 'favorites': favorites = msg.data; renderFavorites(); break;
+            case 'scheduled': renderScheduledMessages(msg.data); break;
+            case 'disconnected': updateStatus(false); break;
         }
-        
-        function updateContactsProgress(current, total) {
-            const statusDiv = document.getElementById('status');
-            statusDiv.className = 'status waiting';
-            statusDiv.textContent = `Loading contacts ${current}/${total}...`;
+    };
+
+    ws.onclose = () => { console.log('WS disconnected'); setTimeout(connectWebSocket, 3000); };
+    ws.onerror = () => {};
+}
+
+// ─── Status ───────────────────────────────────────────────────────────────────
+function showQR(data) {
+    document.getElementById('qrSection').classList.remove('hidden');
+    document.getElementById('qrImage').src = data;
+    document.getElementById('scheduleForm').classList.add('hidden');
+    setStatus('waiting', '📱 Scan QR code with WhatsApp to connect');
+    if (statusPollInterval) { clearInterval(statusPollInterval); statusPollInterval = setInterval(pollStatus, 4000); }
+}
+
+function setStatus(cls, text) {
+    const s = document.getElementById('status');
+    s.className = `status ${cls}`;
+    s.textContent = text;
+}
+
+function updateProgress(current, total) {
+    setStatus('waiting', `Loading contacts ${current}/${total}…`);
+}
+
+function updateStatusContacts() {
+    setStatus('ready', `✅ WhatsApp connected (${contacts.length} contacts)`);
+}
+
+function updateStatus(ready, loadData = false) {
+    if (ready) {
+        setStatus('ready', '✅ WhatsApp connected');
+        document.getElementById('qrSection').classList.add('hidden');
+        document.getElementById('scheduleForm').classList.remove('hidden');
+        if (loadData) loadInitialData();
+        if (statusPollInterval) { clearInterval(statusPollInterval); statusPollInterval = null; }
+    } else {
+        setStatus('waiting', 'Connecting…');
+        document.getElementById('scheduleForm').classList.add('hidden');
+    }
+}
+
+async function loadInitialData() {
+    try { const r = await api('GET','/api/contacts'); if(r.ok) contacts = r.data; } catch(e){}
+    try { const r = await api('GET','/api/favorites'); if(r.ok){ favorites = r.data; renderFavorites(); } } catch(e){}
+    try { const r = await api('GET','/api/scheduled'); if(r.ok) renderScheduledMessages(r.data); } catch(e){}
+}
+
+// ─── Refresh contacts ─────────────────────────────────────────────────────────
+async function refreshContacts() {
+    const btn = document.getElementById('refreshBtn');
+    btn.textContent = '↻ Loading…';
+    btn.disabled = true;
+    try {
+        const r = await api('GET','/api/contacts?refresh=true');
+        if(r.ok) { contacts = r.data; renderSearchResults(document.getElementById('searchBox').value, true); }
+        btn.textContent = '✓ Done';
+        setTimeout(() => { btn.textContent = '↻ Refresh'; btn.disabled = false; }, 1200);
+    } catch(e) {
+        btn.textContent = '↻ Refresh';
+        btn.disabled = false;
+    }
+}
+
+// ─── Contact Search ───────────────────────────────────────────────────────────
+const searchBox = document.getElementById('searchBox');
+const searchResults = document.getElementById('searchResults');
+
+searchBox.addEventListener('input', e => renderSearchResults(e.target.value));
+searchBox.addEventListener('focus', () => renderSearchResults(searchBox.value));
+document.addEventListener('click', e => { if (!e.target.closest('.search-container')) searchResults.innerHTML = ''; });
+
+function getContactNumber(c) {
+    if (c.isGroup) return '';
+    if (c.number) return c.number;
+    const m = c.id.match(/(\d+)@/);
+    return m ? m[1] : '';
+}
+
+function renderSearchResults(query = '', force = false) {
+    const filtered = query
+        ? contacts.filter(c => c.name.toLowerCase().includes(query.toLowerCase()) || getContactNumber(c).includes(query))
+        : contacts;
+
+    if (filtered.length === 0) {
+        searchResults.innerHTML = '<div style="padding:20px;text-align:center;color:#8696a0">No results</div>';
+        return;
+    }
+
+    searchResults.innerHTML = filtered.slice(0, 50).map(c => {
+        const fav = favorites.some(f => f.chat_id === c.id);
+        const num = getContactNumber(c);
+        return `<div class="search-result-item ${selectedContact?.id===c.id?'selected':''}" onclick="selectContact('${c.id}')">
+            <div class="result-info">
+                <div class="result-name">${c.isGroup?'📁':'👤'} ${esc(c.name)}</div>
+                ${num?`<div class="result-number">${num}</div>`:''}
+            </div>
+            <button class="star-btn ${fav?'starred':''}" onclick="event.stopPropagation();toggleFavorite('${c.id}','${c.name.replace(/'/g,"\\'")}',${c.isGroup})">${fav?'★':'☆'}</button>
+        </div>`;
+    }).join('');
+}
+
+function selectContact(id) {
+    selectedContact = contacts.find(c => c.id === id);
+    searchResults.innerHTML = '';
+    searchBox.value = '';
+    const num = selectedContact ? getContactNumber(selectedContact) : '';
+    document.getElementById('selectedContactDisplay').innerHTML = selectedContact
+        ? `<div class="selected-contact-display">
+            <span class="name">${selectedContact.isGroup?'📁':'👤'} ${esc(selectedContact.name)}${num?` · <span style="color:#8696a0;font-weight:400;font-size:12px">${num}</span>`:''}</span>
+            <button class="clear-selection" onclick="clearSelection()">✕</button>
+          </div>` : '';
+}
+
+function clearSelection() {
+    selectedContact = null;
+    document.getElementById('selectedContactDisplay').innerHTML = '';
+}
+
+// ─── Favorites ────────────────────────────────────────────────────────────────
+async function toggleFavorite(chatId, name, isGroup) {
+    const isFav = favorites.some(f => f.chat_id === chatId);
+    try {
+        if (isFav) {
+            await api('DELETE', `/api/favorites/${encodeURIComponent(chatId)}`);
+        } else {
+            await api('POST', '/api/favorites', { chatId, name, isGroup });
         }
+    } catch(e) {}
+}
 
-        async function loadInitialData() {
-            try {
-                const res = await fetch(`${BASE_URL}/api/contacts`);
-                contacts = await res.json();
-            } catch (e) {}
+function renderFavorites() {
+    const el = document.getElementById('favoritesSection');
+    if (!favorites.length) {
+        el.innerHTML = '<p style="color:#8696a0;font-size:13px">No favorites yet. Click ★ in search to add.</p>';
+        return;
+    }
+    el.innerHTML = favorites.map(f => {
+        const c = contacts.find(c => c.id === f.chat_id);
+        const num = c ? getContactNumber(c) : '';
+        return `<div class="favorite-item ${selectedContact?.id===f.chat_id?'selected':''}" onclick="selectContact('${f.chat_id}')">
+            <div class="favorite-info">
+                <div class="favorite-name">${f.is_group?'📁':'👤'} ${esc(f.name)}</div>
+                ${num?`<div class="favorite-number">${num}</div>`:''}
+            </div>
+            <button class="remove-fav" onclick="event.stopPropagation();toggleFavorite('${f.chat_id}','${f.name.replace(/'/g,"\\'")}',${f.is_group})">✕</button>
+        </div>`;
+    }).join('');
+}
 
-            try {
-                const res = await fetch(`${BASE_URL}/api/favorites`);
-                favorites = await res.json();
-                renderFavorites();
-            } catch (e) {}
+// ─── Messages ─────────────────────────────────────────────────────────────────
+function addMessageInput() {
+    const c = document.getElementById('messagesContainer');
+    const n = c.children.length + 1;
+    const w = document.createElement('div');
+    w.className = 'message-input-wrapper';
+    w.innerHTML = `<span>${n}.</span>
+        <textarea class="message-input" placeholder="Message ${n}…"></textarea>
+        <button class="remove-msg-btn" onclick="removeMessageInput(this)">✕</button>`;
+    c.appendChild(w);
+}
 
-            try {
-                const res = await fetch(`${BASE_URL}/api/scheduled`);
-                const messages = await res.json();
-                renderScheduledMessages(messages);
-            } catch (e) {}
-        }
+function removeMessageInput(btn) {
+    const c = document.getElementById('messagesContainer');
+    if (c.children.length > 1) {
+        btn.parentElement.remove();
+        [...c.children].forEach((ch, i) => { ch.querySelector('span').textContent = (i+1)+'.'; });
+    }
+}
 
-        // Search functionality
-        const searchBox = document.getElementById('searchBox');
-        const searchResults = document.getElementById('searchResults');
+// ─── File Attachment ──────────────────────────────────────────────────────────
+document.getElementById('fileInput').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 25 * 1024 * 1024) { alert('File too large (max 25 MB)'); e.target.value=''; return; }
 
-        searchBox.addEventListener('input', (e) => {
-            renderSearchResults(e.target.value);
-        });
+    const base64 = await fileToBase64(file);
+    attachedFile = { base64, name: file.name, type: file.type || 'application/octet-stream' };
 
-        searchBox.addEventListener('focus', () => {
-            renderSearchResults(searchBox.value);
-        });
+    const area = document.getElementById('fileAttachArea');
+    area.classList.add('has-file');
+    area.innerHTML = `<div class="icon">✅</div><p>${esc(file.name)}</p><p style="font-size:11px;color:#8696a0">${formatBytes(file.size)}</p>`;
+    document.getElementById('fileInfo').classList.add('hidden'); // area shows info already
+});
 
-        document.addEventListener('click', (e) => {
-            if (!e.target.closest('.search-container')) {
-                searchResults.innerHTML = '';
-            }
-        });
+function fileToBase64(file) {
+    return new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => res(r.result.split(',')[1]);
+        r.onerror = rej;
+        r.readAsDataURL(file);
+    });
+}
 
-        function renderSearchResults(query = '', forceUpdate = false) {
-            // Only skip rendering if there's no query, results are already shown, and we're not forcing an update
-            if (!query && !forceUpdate && searchResults.children.length > 0) {
-                return;
-            }
+function removeFile() {
+    attachedFile = null;
+    document.getElementById('fileInput').value = '';
+    const area = document.getElementById('fileAttachArea');
+    area.classList.remove('has-file');
+    area.innerHTML = `<div class="icon">📎</div><p>Click to attach a file</p><p style="font-size:11px;color:#8696a0;margin-top:4px">Images, videos, documents — max 25 MB</p>`;
+}
 
-            const filtered = query ?
-                contacts.filter(c => 
-                    c.name.toLowerCase().includes(query.toLowerCase()) ||
-                    getContactNumber(c).includes(query)
-                ) :
-                contacts;
+// ─── Schedule Mode ────────────────────────────────────────────────────────────
+function setScheduleMode(mode) {
+    scheduleMode = mode;
+    document.getElementById('tabDatetime').classList.toggle('active', mode === 'datetime');
+    document.getElementById('tabDuration').classList.toggle('active', mode === 'duration');
+    document.getElementById('datetimePanel').classList.toggle('hidden', mode !== 'datetime');
+    document.getElementById('durationPanel').classList.toggle('hidden', mode !== 'duration');
+    if (mode === 'duration') updateComputedTime();
+}
 
-            searchResults.innerHTML = filtered.slice(0, 50).map(contact => {
-                const isFavorite = favorites.some(f => f.chat_id === contact.id);
-                const phoneNumber = getContactNumber(contact);
-                return `
-                    <div class="search-result-item ${selectedContact && selectedContact.id === contact.id ? 'selected' : ''}" 
-                         onclick="selectContact('${contact.id}')">
-                        <div class="result-info">
-                            <div class="result-name">
-                                <span class="result-icon">${contact.isGroup ? '📁' : '👤'}</span>
-                                ${contact.name}
-                            </div>
-                            ${phoneNumber ? `<div class="result-number">${phoneNumber}</div>` : ''}
-                        </div>
-                        <button class="star-btn ${isFavorite ? 'starred' : ''}" 
-                                onclick="event.stopPropagation(); toggleFavorite('${contact.id}', '${contact.name.replace(/'/g, "\\'")}', ${contact.isGroup})">
-                            ${isFavorite ? '★' : '☆'}
-                        </button>
-                    </div>
-                `;
-            }).join('');
+function updateComputedTime() {
+    const days    = parseInt(document.getElementById('durDays').value) || 0;
+    const hours   = parseInt(document.getElementById('durHours').value) || 0;
+    const minutes = parseInt(document.getElementById('durMinutes').value) || 0;
+    const totalMs = ((days * 24 + hours) * 60 + minutes) * 60000;
+    const target  = new Date(Date.now() + totalMs);
+    const el = document.getElementById('computedTime');
+    if (totalMs <= 0) {
+        el.textContent = '⚠ Enter a duration greater than 0';
+        el.querySelector && el.querySelector('strong') && (el.innerHTML = '');
+        return;
+    }
+    const parts = [];
+    if (days)    parts.push(`${days}d`);
+    if (hours)   parts.push(`${hours}h`);
+    if (minutes) parts.push(`${minutes}m`);
+    el.innerHTML = `Send in <strong>${parts.join(' ')}</strong> — at <strong>${target.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})}</strong>`;
+}
 
-            if (filtered.length === 0) {
-                searchResults.innerHTML = '<div style="padding: 20px; text-align: center; color: #8696a0;">No results found</div>';
-            }
-        }
+function getScheduledTime() {
+    if (scheduleMode === 'duration') {
+        const days    = parseInt(document.getElementById('durDays').value) || 0;
+        const hours   = parseInt(document.getElementById('durHours').value) || 0;
+        const minutes = parseInt(document.getElementById('durMinutes').value) || 0;
+        const totalMs = ((days * 24 + hours) * 60 + minutes) * 60000;
+        if (totalMs <= 0) { alert('Duration must be greater than 0'); return null; }
+        return new Date(Date.now() + totalMs).toISOString();
+    } else {
+        const date   = document.getElementById('scheduleDate').value;
+        const hour   = document.getElementById('hourInput').value.padStart(2,'0');
+        const minute = document.getElementById('minuteInput').value.padStart(2,'0');
+        if (!date) { alert('Please set a date'); return null; }
+        return new Date(`${date}T${hour}:${minute}:00`).toISOString();
+    }
+}
 
-        function selectContact(contactId) {
-            selectedContact = contacts.find(c => c.id === contactId);
-            searchResults.innerHTML = '';
-            searchBox.value = '';
-            
-            const display = document.getElementById('selectedContactDisplay');
-            if (selectedContact) {
-                display.innerHTML = `
-                    <div class="selected-contact-display">
-                        <span class="name">
-                            ${selectedContact.isGroup ? '📁' : '👤'} ${selectedContact.name}
-                        </span>
-                        <button class="clear-selection" onclick="clearSelection()">✕</button>
-                    </div>
-                `;
-            } else {
-                display.innerHTML = '';
-            }
-        }
+// ─── Schedule ─────────────────────────────────────────────────────────────────
+async function scheduleMessage() {
+    if (!selectedContact) { alert('Please select a contact or group'); return; }
 
-        function clearSelection() {
-            selectedContact = null;
-            document.getElementById('selectedContactDisplay').innerHTML = '';
-        }
+    const scheduledTime = getScheduledTime();
+    if (!scheduledTime) return;
 
-        async function toggleFavorite(chatId, name, isGroup) {
-            const isFavorite = favorites.some(f => f.chat_id === chatId);
-            
-            try {
-                if (isFavorite) {
-                    await fetch(`${BASE_URL}/api/favorites/${encodeURIComponent(chatId)}`, { method: 'DELETE' });
-                } else {
-                    await fetch(`${BASE_URL}/api/favorites`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ chatId, name, isGroup })
-                    });
-                }
-            } catch (e) {}
-        }
+    const inputs   = document.querySelectorAll('.message-input');
+    const messages = [...inputs].map(i => i.value.trim()).filter(Boolean);
 
-        function renderFavorites() {
-            const section = document.getElementById('favoritesSection');
-            if (favorites.length === 0) {
-                section.innerHTML = '<p style="color: #8696a0; font-size: 13px;">No favorites yet. Click ★ in search to add.</p>';
-                return;
-            }
+    if (messages.length === 0 && !attachedFile) {
+        alert('Please enter at least one message or attach a file');
+        return;
+    }
 
-            section.innerHTML = favorites.map(fav => {
-                const contact = contacts.find(c => c.id === fav.chat_id);
-                const phoneNumber = contact ? getContactNumber(contact) : '';
-                return `
-                    <div class="favorite-item ${selectedContact && selectedContact.id === fav.chat_id ? 'selected' : ''}" 
-                         onclick="selectContact('${fav.chat_id}')">
-                        <div class="favorite-info">
-                            <div class="favorite-name">
-                                ${fav.is_group ? '📁' : '👤'} ${fav.name}
-                            </div>
-                            ${phoneNumber ? `<div class="favorite-number">${phoneNumber}</div>` : ''}
-                        </div>
-                        <button class="remove-fav" onclick="event.stopPropagation(); toggleFavorite('${fav.chat_id}', '${fav.name.replace(/'/g, "\\'")}', ${fav.is_group})">✕</button>
-                    </div>
-                `;
-            }).join('');
-        }
+    // If only file with no text, add empty caption
+    const finalMessages = messages.length > 0 ? messages : [''];
 
-        function addMessageInput() {
+    if (finalMessages.length > 1) {
+        if (!confirm(`Schedule ${finalMessages.length} messages with realistic delays?`)) return;
+    }
+
+    const body = {
+        phoneNumber:  selectedContact.id,
+        contactName:  selectedContact.name,
+        messages:     finalMessages,
+        scheduledTime
+    };
+    if (attachedFile) {
+        body.fileData     = attachedFile.base64;
+        body.fileName     = attachedFile.name;
+        body.fileMimeType = attachedFile.type;
+    }
+
+    try {
+        const r = await api('POST', '/api/schedule', body);
+        if (r.ok) {
+            alert(`✅ ${r.data.count} message(s) scheduled!`);
+            inputs.forEach(i => i.value = '');
+            clearSelection();
+            removeFile();
             const container = document.getElementById('messagesContainer');
-            const count = container.children.length + 1;
-            
-            const wrapper = document.createElement('div');
-            wrapper.className = 'message-input-wrapper';
-            wrapper.innerHTML = `
-                <span>${count}.</span>
-                <textarea class="message-input" placeholder="Type message ${count}..."></textarea>
-                <button class="remove-msg-btn" onclick="removeMessageInput(this)">✕</button>
-            `;
-            container.appendChild(wrapper);
+            while (container.children.length > 1) container.removeChild(container.lastChild);
+        } else {
+            alert('Error: ' + (r.data.error || 'Unknown error'));
         }
+    } catch(e) {
+        alert('Failed: ' + e.message);
+    }
+}
 
-        function removeMessageInput(btn) {
-            const container = document.getElementById('messagesContainer');
-            if (container.children.length > 1) {
-                btn.parentElement.remove();
-                Array.from(container.children).forEach((child, idx) => {
-                    child.querySelector('span').textContent = (idx + 1) + '.';
-                });
-            }
+// ─── Scheduled Messages ───────────────────────────────────────────────────────
+function renderScheduledMessages(messages) {
+    const listDiv     = document.getElementById('scheduledList');
+    const messagesDiv = document.getElementById('messagesList');
+
+    if (!messages.length) { listDiv.classList.add('hidden'); return; }
+    listDiv.classList.remove('hidden');
+
+    // Group by batch
+    const batches = {};
+    messages.forEach(m => {
+        const bid = m.batch_id || String(m.id);
+        if (!batches[bid]) batches[bid] = [];
+        batches[bid].push(m);
+    });
+
+    messagesDiv.innerHTML = Object.values(batches).map(msgs => {
+        const m0    = msgs[0];
+        const isBatch = msgs.length > 1;
+        const name  = m0.contact_name || formatChatId(m0.phone_number);
+        const icon  = m0.phone_number.includes('@g.us') ? '📁' : '👤';
+
+        if (isBatch) {
+            return `<div class="batch-group">
+                <div class="batch-header">
+                    <div><strong>📨 ${msgs.length} messages</strong> <span class="contact-label">→ ${icon} ${esc(name)}</span></div>
+                    <button class="btn-small btn-delete" onclick="deleteBatch('${m0.batch_id}')">Delete All</button>
+                </div>
+                ${msgs.map((m,i) => renderScheduledItem(m, i+1)).join('')}
+            </div>`;
+        } else {
+            return `<div class="batch-group">
+                <div class="batch-header">
+                    <span class="contact-label">${icon} ${esc(name)}</span>
+                </div>
+                ${renderScheduledItem(m0, 0)}
+            </div>`;
         }
+    }).join('');
+}
 
-        async function scheduleMessage() {
-            if (!selectedContact) {
-                alert('Please select a contact or group');
-                return;
-            }
+function renderScheduledItem(m, idx) {
+    const dt = new Date(m.scheduled_time);
+    const dtStr = dt.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false});
+    const hasFile = !!m.file_name;
+    return `<div class="scheduled-item">
+        ${hasFile ? `<div class="file-badge">📎 ${esc(m.file_name)}</div>` : ''}
+        <div class="message-text">${idx ? `<strong>${idx}.</strong> ` : ''}${esc(m.message)}</div>
+        <small>⏰ ${dtStr}</small>
+        <div class="scheduled-actions">
+            <button class="btn-small btn-edit" onclick="openEditModal(${m.id},'${esc(m.message).replace(/'/g,"\\'")}','${m.scheduled_time}')">✏️ Edit</button>
+            <button class="btn-small btn-delete" onclick="deleteMessage(${m.id})">✕ Delete</button>
+        </div>
+    </div>`;
+}
 
-            const date = document.getElementById('scheduleDate').value;
-            const hour = document.getElementById('hourInput').value.padStart(2, '0');
-            const minute = document.getElementById('minuteInput').value.padStart(2, '0');
+function formatChatId(id) {
+    if (!id) return '?';
+    if (id.includes('@g.us')) return 'Group';
+    const m = id.match(/(\d+)@/);
+    return m ? m[1] : id;
+}
 
-            const messageInputs = document.querySelectorAll('.message-input');
-            const messages = Array.from(messageInputs)
-                .map(input => input.value.trim())
-                .filter(msg => msg.length > 0);
+async function deleteMessage(id) {
+    if (!confirm('Delete this message?')) return;
+    await api('DELETE', `/api/scheduled/${id}`);
+}
 
-            if (messages.length === 0) {
-                alert('Please enter at least one message');
-                return;
-            }
+async function deleteBatch(batchId) {
+    if (!confirm('Delete all messages in this batch?')) return;
+    await api('DELETE', `/api/scheduled/batch/${batchId}`);
+}
 
-            if (!date) {
-                alert('Please set date');
-                return;
-            }
+// ─── Edit Modal ───────────────────────────────────────────────────────────────
+function openEditModal(id, text, isoTime) {
+    document.getElementById('editMsgId').value = id;
+    document.getElementById('editMsgText').value = text;
+    const dt = new Date(isoTime);
+    const pad = v => v.toString().padStart(2,'0');
+    const y = dt.getFullYear(), mo = dt.getMonth()+1, d = dt.getDate();
+    document.getElementById('editDate').value = `${y}-${pad(mo)}-${pad(d)}`;
+    document.getElementById('editHour').value = pad(dt.getHours());
+    document.getElementById('editMinute').value = pad(dt.getMinutes());
+    document.getElementById('editModal').classList.remove('hidden');
+}
 
-            const scheduledTime = new Date(`${date}T${hour}:${minute}:00`).toISOString();
+function closeEditModal() {
+    document.getElementById('editModal').classList.add('hidden');
+}
 
-            if (messages.length > 1) {
-                if (!confirm(`Schedule ${messages.length} messages with realistic delays (3-8s apart)?`)) return;
-            }
+async function saveEditedMessage() {
+    const id      = document.getElementById('editMsgId').value;
+    const message = document.getElementById('editMsgText').value.trim();
+    const date    = document.getElementById('editDate').value;
+    const hour    = document.getElementById('editHour').value.padStart(2,'0');
+    const minute  = document.getElementById('editMinute').value.padStart(2,'0');
 
-            try {
-                const response = await fetch(`${BASE_URL}/api/schedule`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        phoneNumber: selectedContact.id, 
-                        messages, 
-                        scheduledTime 
-                    })
-                });
+    if (!message) { alert('Message cannot be empty'); return; }
+    if (!date)    { alert('Date is required'); return; }
 
-                const result = await response.json();
-                
-                if (response.ok) {
-                    alert(`${result.count} message(s) scheduled!`);
-                    messageInputs.forEach(input => input.value = '');
-                    clearSelection();
-                } else {
-                    alert('Error: ' + result.error);
-                }
-            } catch (error) {
-                alert('Failed: ' + error.message);
-            }
-        }
+    const scheduledTime = new Date(`${date}T${hour}:${minute}:00`).toISOString();
+    const r = await api('PUT', `/api/scheduled/${id}`, { message, scheduledTime });
+    if (r.ok) {
+        closeEditModal();
+    } else {
+        alert('Error: ' + (r.data.error || 'Failed to update'));
+    }
+}
 
-        function renderScheduledMessages(messages) {
-            const listDiv = document.getElementById('scheduledList');
-            const messagesDiv = document.getElementById('messagesList');
+// Close modal on overlay click
+document.getElementById('editModal').addEventListener('click', function(e) {
+    if (e.target === this) closeEditModal();
+});
 
-            if (messages.length === 0) {
-                listDiv.classList.add('hidden');
-                return;
-            }
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function esc(s) {
+    if (!s) return '';
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 
-            listDiv.classList.remove('hidden');
-
-            const batches = {};
-            messages.forEach(msg => {
-                const batchId = msg.batch_id || msg.id.toString();
-                if (!batches[batchId]) batches[batchId] = [];
-                batches[batchId].push(msg);
-            });
-
-            messagesDiv.innerHTML = Object.entries(batches).map(([batchId, msgs]) => {
-                const isBatch = msgs.length > 1;
-                const displayName = msgs[0].phone_number.includes('@g.us') ? '📁 Group' : 
-                                   msgs[0].phone_number.includes('@') ? '👤 Contact' : msgs[0].phone_number;
-                
-                if (isBatch) {
-                    return `
-                        <div class="batch-group">
-                            <div class="batch-header">
-                                <strong>📨 ${msgs.length} messages → ${displayName}</strong>
-                                <button class="btn-small btn-delete" onclick="deleteBatch('${batchId}')">Delete All</button>
-                            </div>
-                            ${msgs.map((msg, idx) => {
-                                const dt = new Date(msg.scheduled_time);
-                                return `
-                                    <div class="scheduled-item">
-                                        <div class="scheduled-info">
-                                            <div class="message-text">${idx + 1}. ${msg.message}</div>
-                                            <small>⏰ ${dt.toLocaleString('pt-BR', {day:'2-digit', month:'2-digit', year:'numeric'})} às ${dt.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit', hour12:false})}</small>
-                                        </div>
-                                        <div class="scheduled-actions">
-                                            <button class="btn-small btn-delete" onclick="deleteMessage(${msg.id})">✕</button>
-                                        </div>
-                                    </div>
-                                `;
-                            }).join('')}
-                        </div>
-                    `;
-                } else {
-                    const msg = msgs[0];
-                    const dt = new Date(msg.scheduled_time);
-                    return `
-                        <div class="batch-group">
-                            <div class="scheduled-item">
-                                <div class="scheduled-info">
-                                    <div class="message-text">${msg.message}</div>
-                                    <small>To: ${displayName} | ⏰ ${dt.toLocaleString('pt-BR', {day:'2-digit', month:'2-digit', year:'numeric'})} às ${dt.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit', hour12:false})}</small>
-                                </div>
-                                <div class="scheduled-actions">
-                                    <button class="btn-small btn-delete" onclick="deleteMessage(${msg.id})">Delete</button>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                }
-            }).join('');
-        }
-
-        async function deleteMessage(id) {
-            try {
-                await fetch(`${BASE_URL}/api/scheduled/${id}`, { method: 'DELETE' });
-            } catch (error) {}
-        }
-
-        async function deleteBatch(batchId) {
-            if (!confirm('Delete all messages in this batch?')) return;
-            try {
-                await fetch(`${BASE_URL}/api/scheduled/batch/${batchId}`, { method: 'DELETE' });
-            } catch (error) {}
-        }
-
-        // WebSocket and status check are now initialized in initializeApp()
-    </script>
+function formatBytes(b) {
+    if (b < 1024) return b + ' B';
+    if (b < 1024*1024) return (b/1024).toFixed(1) + ' KB';
+    return (b/(1024*1024)).toFixed(1) + ' MB';
+}
+</script>
 </body>
 </html>

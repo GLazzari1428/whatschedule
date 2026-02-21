@@ -1,6 +1,6 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-const { Client, LocalAuth } = require('whatsapp-web.js');
+const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const cron = require('node-cron');
 const QRCode = require('qrcode');
 const Database = require('better-sqlite3');
@@ -8,6 +8,8 @@ const http = require('http');
 const WebSocket = require('ws');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
+const os = require('os');
 
 const app = express();
 const server = http.createServer(app);
@@ -15,13 +17,23 @@ const wss = new WebSocket.Server({ server });
 
 const PORT = process.env.PORT || 3000;
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
+const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
+const APP_PASSWORD  = process.env.APP_PASSWORD  || '';
+// AUTH_ENABLED defaults to true when a password is set, false otherwise.
+// Set AUTH_ENABLED=false to disable auth even if APP_PASSWORD is defined.
+// Set AUTH_ENABLED=true  to require auth (APP_PASSWORD must also be set).
+const AUTH_ENABLED  = (() => {
+  const raw = process.env.AUTH_ENABLED;
+  if (raw === undefined || raw === '') return !!APP_PASSWORD; // backwards-compat default
+  return raw.toLowerCase() !== 'false' && raw !== '0';
+})();
 
-// Ensure data directory exists
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-}
+// Ensure directories exist
+[DATA_DIR, UPLOADS_DIR].forEach(dir => {
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+});
 
-// Database setup
+// ─── Database Setup ───────────────────────────────────────────────────────────
 const dbPath = path.join(DATA_DIR, 'scheduler.db');
 const db = new Database(dbPath);
 
@@ -29,11 +41,15 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS scheduled_messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     phone_number TEXT NOT NULL,
+    contact_name TEXT,
     message TEXT NOT NULL,
     scheduled_time TEXT NOT NULL,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     sent BOOLEAN DEFAULT 0,
-    batch_id TEXT
+    batch_id TEXT,
+    file_path TEXT,
+    file_name TEXT,
+    file_mimetype TEXT
   )
 `);
 
@@ -47,44 +63,99 @@ db.exec(`
   )
 `);
 
-// WhatsApp client setup
+// Migrations for existing databases
+const migrations = [
+  'ALTER TABLE scheduled_messages ADD COLUMN contact_name TEXT',
+  'ALTER TABLE scheduled_messages ADD COLUMN file_path TEXT',
+  'ALTER TABLE scheduled_messages ADD COLUMN file_name TEXT',
+  'ALTER TABLE scheduled_messages ADD COLUMN file_mimetype TEXT',
+];
+migrations.forEach(sql => { try { db.exec(sql); } catch (e) { /* already exists */ } });
+
+// ─── Auth ─────────────────────────────────────────────────────────────────────
+const authSessions = new Map(); // token -> expiry
+
+function generateToken() {
+  return crypto.randomBytes(32).toString('hex');
+}
+
+function requireAuth(req, res, next) {
+  if (!AUTH_ENABLED) return next();
+  const token = req.headers['x-auth-token'];
+  const expiry = authSessions.get(token);
+  if (expiry && expiry > Date.now()) {
+    authSessions.set(token, Date.now() + 24 * 60 * 60 * 1000);
+    return next();
+  }
+  res.status(401).json({ error: 'Unauthorized' });
+}
+
+// ─── File Helper ──────────────────────────────────────────────────────────────
+function saveUploadedFile(base64Data, fileName) {
+  const ext = path.extname(fileName) || '.bin';
+  const uniqueName = Date.now() + '_' + crypto.randomBytes(8).toString('hex') + ext;
+  const filePath = path.join(UPLOADS_DIR, uniqueName);
+  fs.writeFileSync(filePath, Buffer.from(base64Data, 'base64'));
+  return filePath;
+}
+
+// ─── WhatsApp State ───────────────────────────────────────────────────────────
 let client = null;
 let qrCodeData = null;
 let isReady = false;
 let chatsCache = null;
 let lastCacheUpdate = null;
 
-// WebSocket broadcast
+// ─── WebSocket Helpers ────────────────────────────────────────────────────────
 function broadcast(data) {
-  wss.clients.forEach(client => {
-    if (client.readyState === WebSocket.OPEN) {
-      try {
-        client.send(JSON.stringify(data));
-      } catch (error) {
-        console.error('WebSocket broadcast error:', error.message);
-      }
+  const msg = JSON.stringify(data);
+  wss.clients.forEach(ws => {
+    if (ws.readyState === WebSocket.OPEN) {
+      try { ws.send(msg); } catch (e) {}
     }
   });
 }
 
+// THE KEY BUG FIX: send current state to any newly connected WS client
+// Previously, if WS reconnected AFTER the 'ready' event fired, the client
+// would never learn that WhatsApp is connected.
+function sendCurrentState(ws) {
+  if (ws.readyState !== WebSocket.OPEN) return;
+  try {
+    if (isReady) {
+      ws.send(JSON.stringify({ type: 'ready' }));
+      if (chatsCache) {
+        ws.send(JSON.stringify({ type: 'contacts', data: chatsCache }));
+      }
+      const favs = db.prepare('SELECT * FROM favorites ORDER BY added_at DESC').all();
+      ws.send(JSON.stringify({ type: 'favorites', data: favs }));
+      const scheduled = db.prepare(
+        'SELECT * FROM scheduled_messages WHERE sent = 0 ORDER BY scheduled_time ASC'
+      ).all();
+      ws.send(JSON.stringify({ type: 'scheduled', data: scheduled }));
+    } else if (qrCodeData) {
+      ws.send(JSON.stringify({ type: 'qr', data: qrCodeData }));
+    }
+  } catch (e) {}
+}
+
+wss.on('connection', (ws) => {
+  sendCurrentState(ws); // ← This fixes the QR-scan-but-page-doesn't-update bug
+  ws.on('error', err => console.error('WS error:', err.message));
+});
+
+// ─── WhatsApp Client ──────────────────────────────────────────────────────────
 function initializeWhatsAppClient() {
   const clientOptions = {
     authStrategy: new LocalAuth({ dataPath: path.join(__dirname, '.wwebjs_auth') }),
     puppeteer: {
       headless: true,
       args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
-        '--disable-gpu'
+        '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas', '--no-first-run', '--no-zygote', '--disable-gpu'
       ]
     }
   };
-
-  // Use system Chromium in Docker
   if (process.env.PUPPETEER_EXECUTABLE_PATH) {
     clientOptions.puppeteer.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
   }
@@ -93,7 +164,6 @@ function initializeWhatsAppClient() {
 
   client.on('qr', (qr) => {
     console.log('QR Code received');
-    qrCodeData = qr;
     QRCode.toDataURL(qr, (err, url) => {
       if (!err) {
         qrCodeData = url;
@@ -107,12 +177,12 @@ function initializeWhatsAppClient() {
     isReady = true;
     qrCodeData = null;
     broadcast({ type: 'ready' });
-    
+
     setTimeout(async () => {
       try {
         console.log('Preloading chats...');
         await loadChatsCache();
-        console.log(`Successfully loaded ${chatsCache ? chatsCache.length : 0} chats`);
+        console.log(`Loaded ${chatsCache ? chatsCache.length : 0} chats`);
         broadcast({ type: 'contacts', data: chatsCache });
       } catch (error) {
         console.error('Error preloading chats:', error.message);
@@ -120,12 +190,10 @@ function initializeWhatsAppClient() {
     }, 3000);
   });
 
-  client.on('authenticated', () => {
-    console.log('WhatsApp authenticated');
-  });
+  client.on('authenticated', () => console.log('WhatsApp authenticated'));
 
   client.on('auth_failure', (msg) => {
-    console.error('WhatsApp authentication failed:', msg);
+    console.error('Auth failed:', msg);
     isReady = false;
   });
 
@@ -143,163 +211,137 @@ function initializeWhatsAppClient() {
 }
 
 async function loadChatsCache(forceRefresh = false) {
-  try {
-    const now = Date.now();
-    // If forceRefresh is true, bypass cache check
-    if (!forceRefresh && chatsCache && lastCacheUpdate && (now - lastCacheUpdate) < 30000) {
-      return chatsCache;
-    }
-    
-    const allChats = await client.getChats();
-    const processed = [];
-    const totalChats = allChats.length;
-    
-    for (let i = 0; i < allChats.length; i++) {
-      const chat = allChats[i];
-      try {
-        if (chat.isGroup) {
-          processed.push({
-            id: chat.id._serialized,
-            name: chat.name || 'Unnamed Group',
-            number: null,
-            isGroup: true
-          });
-        } else if (!chat.isMe) {
-          const contactName = chat.name || chat.id.user || 'Unknown';
-          processed.push({
-            id: chat.id._serialized,
-            name: contactName,
-            number: chat.id.user,
-            isGroup: false
-          });
-        }
-        
-        // Broadcast progress every 10 chats or on last chat
-        if ((i + 1) % 10 === 0 || (i + 1) === totalChats) {
-          broadcast({ 
-            type: 'contacts_progress', 
-            data: { 
-              current: i + 1, 
-              total: totalChats 
-            } 
-          });
-        }
-      } catch (err) {
-        console.error(`Error processing chat:`, err.message);
-      }
-    }
-    
-    chatsCache = processed.sort((a, b) => {
-      if (a.isGroup && !b.isGroup) return -1;
-      if (!a.isGroup && b.isGroup) return 1;
-      return (a.name || '').localeCompare(b.name || '');
-    });
-    
-    lastCacheUpdate = now;
+  const now = Date.now();
+  if (!forceRefresh && chatsCache && lastCacheUpdate && (now - lastCacheUpdate) < 30000) {
     return chatsCache;
-  } catch (error) {
-    console.error('Error loading chats cache:', error.message);
-    throw error;
   }
+
+  const allChats = await client.getChats();
+  const processed = [];
+
+  for (let i = 0; i < allChats.length; i++) {
+    const chat = allChats[i];
+    try {
+      if (chat.isGroup) {
+        processed.push({ id: chat.id._serialized, name: chat.name || 'Unnamed Group', number: null, isGroup: true });
+      } else if (!chat.isMe) {
+        processed.push({ id: chat.id._serialized, name: chat.name || chat.id.user || 'Unknown', number: chat.id.user, isGroup: false });
+      }
+
+      if ((i + 1) % 10 === 0 || (i + 1) === allChats.length) {
+        broadcast({ type: 'contacts_progress', data: { current: i + 1, total: allChats.length } });
+      }
+    } catch (err) {
+      console.error('Error processing chat:', err.message);
+    }
+  }
+
+  chatsCache = processed.sort((a, b) => {
+    if (a.isGroup && !b.isGroup) return -1;
+    if (!a.isGroup && b.isGroup) return 1;
+    return (a.name || '').localeCompare(b.name || '');
+  });
+  lastCacheUpdate = now;
+  return chatsCache;
 }
 
 function calculateTypingDelay(messageLength) {
-  const baseCharsPerSecond = 3;
-  const variance = 0.5;
-  const charsPerSecond = baseCharsPerSecond + (Math.random() * variance * 2 - variance);
-  const baseDelay = (messageLength / charsPerSecond) * 1000;
-  const thinkingTime = 1000 + Math.random() * 2000;
-  return Math.floor(baseDelay + thinkingTime);
+  const charsPerSecond = 3 + (Math.random() - 0.5);
+  return Math.floor((messageLength / charsPerSecond) * 1000 + 1000 + Math.random() * 2000);
 }
 
-// Middleware
-app.use(bodyParser.json());
+// ─── Middleware ───────────────────────────────────────────────────────────────
+app.use(bodyParser.json({ limit: '25mb' })); // 25MB for file uploads
 app.use(express.static('public'));
 
-// CORS middleware - Allow requests from Capacitor app
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With');
-  if (req.method === 'OPTIONS') {
-    res.sendStatus(200);
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With, x-auth-token');
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
+  next();
+});
+
+// ─── Auth Routes ──────────────────────────────────────────────────────────────
+app.get('/api/auth/check', (req, res) => {
+  if (!AUTH_ENABLED) return res.json({ required: false, valid: true });
+  const token = req.headers['x-auth-token'];
+  const expiry = authSessions.get(token);
+  res.json({ required: true, valid: !!(expiry && expiry > Date.now()) });
+});
+
+app.post('/api/auth/login', (req, res) => {
+  if (!AUTH_ENABLED) {
+    // Auth is off — issue a dummy token so the client flow still works
+    const token = generateToken();
+    authSessions.set(token, Date.now() + 24 * 60 * 60 * 1000);
+    return res.json({ success: true, token });
+  }
+  const { password } = req.body;
+  if (password === APP_PASSWORD) {
+    const token = generateToken();
+    authSessions.set(token, Date.now() + 24 * 60 * 60 * 1000);
+    res.json({ success: true, token });
   } else {
-    next();
+    res.status(401).json({ error: 'Invalid password' });
   }
 });
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error('Express error:', err.stack);
-  res.status(500).json({ error: 'Internal server error' });
+app.post('/api/auth/logout', requireAuth, (req, res) => {
+  const token = req.headers['x-auth-token'];
+  authSessions.delete(token);
+  res.json({ success: true });
 });
 
-// API Routes
+// ─── API Routes ───────────────────────────────────────────────────────────────
 app.get('/api/status', (req, res) => {
-  res.json({
-    isReady,
-    hasQR: !!qrCodeData,
-    qrCode: isReady ? null : qrCodeData
-  });
+  res.json({ isReady, hasQR: !!qrCodeData, qrCode: isReady ? null : qrCodeData });
 });
 
-app.get('/api/contacts', async (req, res) => {
-  if (!isReady) {
-    return res.status(503).json({ error: 'WhatsApp client not ready' });
-  }
-  
+app.get('/api/contacts', requireAuth, async (req, res) => {
+  if (!isReady) return res.status(503).json({ error: 'WhatsApp not ready' });
   try {
-    // Check for refresh parameter to force cache reload
-    const forceRefresh = req.query.refresh === 'true';
-    const chats = await loadChatsCache(forceRefresh);
+    const chats = await loadChatsCache(req.query.refresh === 'true');
     res.json(chats || []);
-  } catch (error) {
+  } catch (e) {
     res.json([]);
   }
 });
 
-app.get('/api/favorites', (req, res) => {
+app.get('/api/favorites', requireAuth, (req, res) => {
   try {
-    const stmt = db.prepare('SELECT * FROM favorites ORDER BY added_at DESC');
-    const favorites = stmt.all();
-    res.json(favorites);
-  } catch (error) {
+    res.json(db.prepare('SELECT * FROM favorites ORDER BY added_at DESC').all());
+  } catch (e) {
     res.json([]);
   }
 });
 
-app.post('/api/favorites', (req, res) => {
+app.post('/api/favorites', requireAuth, (req, res) => {
   try {
     const { chatId, name, isGroup } = req.body;
-    const stmt = db.prepare('INSERT OR REPLACE INTO favorites (chat_id, name, is_group) VALUES (?, ?, ?)');
-    stmt.run(chatId, name, isGroup ? 1 : 0);
-    
-    const allFavorites = db.prepare('SELECT * FROM favorites ORDER BY added_at DESC').all();
-    broadcast({ type: 'favorites', data: allFavorites });
-    
+    db.prepare('INSERT OR REPLACE INTO favorites (chat_id, name, is_group) VALUES (?, ?, ?)').run(chatId, name, isGroup ? 1 : 0);
+    const all = db.prepare('SELECT * FROM favorites ORDER BY added_at DESC').all();
+    broadcast({ type: 'favorites', data: all });
     res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 
-app.delete('/api/favorites/:chatId', (req, res) => {
+app.delete('/api/favorites/:chatId', requireAuth, (req, res) => {
   try {
-    const stmt = db.prepare('DELETE FROM favorites WHERE chat_id = ?');
-    stmt.run(req.params.chatId);
-    
-    const allFavorites = db.prepare('SELECT * FROM favorites ORDER BY added_at DESC').all();
-    broadcast({ type: 'favorites', data: allFavorites });
-    
+    db.prepare('DELETE FROM favorites WHERE chat_id = ?').run(req.params.chatId);
+    const all = db.prepare('SELECT * FROM favorites ORDER BY added_at DESC').all();
+    broadcast({ type: 'favorites', data: all });
     res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 
-app.post('/api/schedule', (req, res) => {
-  const { phoneNumber, messages, scheduledTime } = req.body;
-  
+app.post('/api/schedule', requireAuth, (req, res) => {
+  const { phoneNumber, contactName, messages, scheduledTime, fileData, fileName, fileMimeType } = req.body;
+
   if (!phoneNumber || !messages || messages.length === 0 || !scheduledTime) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
@@ -310,172 +352,170 @@ app.post('/api/schedule', (req, res) => {
   }
 
   try {
-    const batchId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+    // Save file to disk if provided
+    let savedFilePath = null;
+    if (fileData && fileName) {
+      savedFilePath = saveUploadedFile(fileData, fileName);
+    }
+
+    const batchId = Date.now().toString() + crypto.randomBytes(4).toString('hex');
     let cumulativeDelay = 0;
-    const insertedIds = [];
+    const ids = [];
+
+    const stmt = db.prepare(
+      `INSERT INTO scheduled_messages
+        (phone_number, contact_name, message, scheduled_time, batch_id, file_path, file_name, file_mimetype)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    );
 
     messages.forEach((msg, index) => {
-      const msgScheduledTime = new Date(scheduledDate.getTime() + cumulativeDelay);
-      
-      const stmt = db.prepare(
-        'INSERT INTO scheduled_messages (phone_number, message, scheduled_time, batch_id) VALUES (?, ?, ?, ?)'
-      );
-      const result = stmt.run(phoneNumber, msg, msgScheduledTime.toISOString(), batchId);
-      insertedIds.push(result.lastInsertRowid);
-      
+      const msgTime = new Date(scheduledDate.getTime() + cumulativeDelay).toISOString();
+      // Only attach file to first message
+      const fp = index === 0 ? savedFilePath : null;
+      const fn = index === 0 ? (fileName || null) : null;
+      const fm = index === 0 ? (fileMimeType || null) : null;
+
+      const result = stmt.run(phoneNumber, contactName || null, msg, msgTime, batchId, fp, fn, fm);
+      ids.push(result.lastInsertRowid);
+
       if (index < messages.length - 1) {
         cumulativeDelay += calculateTypingDelay(msg.length);
       }
     });
-    
-    console.log(`Scheduled ${messages.length} messages`);
-    
-    const allScheduled = db.prepare('SELECT * FROM scheduled_messages WHERE sent = 0 ORDER BY scheduled_time ASC').all();
-    broadcast({ type: 'scheduled', data: allScheduled });
-    
-    res.json({
-      success: true,
-      count: messages.length,
-      ids: insertedIds
-    });
-  } catch (error) {
-    console.error('Error scheduling:', error.message);
-    res.status(500).json({ error: error.message });
+
+    const all = db.prepare('SELECT * FROM scheduled_messages WHERE sent = 0 ORDER BY scheduled_time ASC').all();
+    broadcast({ type: 'scheduled', data: all });
+
+    res.json({ success: true, count: messages.length, ids });
+  } catch (e) {
+    console.error('Schedule error:', e);
+    res.status(500).json({ error: e.message });
   }
 });
 
-app.get('/api/scheduled', (req, res) => {
+app.get('/api/scheduled', requireAuth, (req, res) => {
   try {
-    const stmt = db.prepare('SELECT * FROM scheduled_messages WHERE sent = 0 ORDER BY scheduled_time ASC');
-    const messages = stmt.all();
-    res.json(messages);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.json(db.prepare('SELECT * FROM scheduled_messages WHERE sent = 0 ORDER BY scheduled_time ASC').all());
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 
-app.put('/api/scheduled/:id', (req, res) => {
+// Edit scheduled message (time and/or content)
+app.put('/api/scheduled/:id', requireAuth, (req, res) => {
   try {
-    const { scheduledTime } = req.body;
-    const stmt = db.prepare('UPDATE scheduled_messages SET scheduled_time = ? WHERE id = ? AND sent = 0');
-    const result = stmt.run(scheduledTime, req.params.id);
-    
+    const { scheduledTime, message } = req.body;
+    const updates = [];
+    const params = [];
+
+    if (scheduledTime) { updates.push('scheduled_time = ?'); params.push(scheduledTime); }
+    if (message !== undefined) { updates.push('message = ?'); params.push(message); }
+
+    if (updates.length === 0) return res.status(400).json({ error: 'Nothing to update' });
+
+    params.push(req.params.id);
+    const result = db.prepare(
+      `UPDATE scheduled_messages SET ${updates.join(', ')} WHERE id = ? AND sent = 0`
+    ).run(...params);
+
     if (result.changes > 0) {
-      const allScheduled = db.prepare('SELECT * FROM scheduled_messages WHERE sent = 0 ORDER BY scheduled_time ASC').all();
-      broadcast({ type: 'scheduled', data: allScheduled });
+      const all = db.prepare('SELECT * FROM scheduled_messages WHERE sent = 0 ORDER BY scheduled_time ASC').all();
+      broadcast({ type: 'scheduled', data: all });
       res.json({ success: true });
     } else {
       res.status(404).json({ error: 'Message not found' });
     }
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 
-app.delete('/api/scheduled/:id', (req, res) => {
+app.delete('/api/scheduled/:id', requireAuth, (req, res) => {
   try {
-    const stmt = db.prepare('DELETE FROM scheduled_messages WHERE id = ? AND sent = 0');
-    const result = stmt.run(req.params.id);
-    
+    const result = db.prepare('DELETE FROM scheduled_messages WHERE id = ? AND sent = 0').run(req.params.id);
     if (result.changes > 0) {
-      const allScheduled = db.prepare('SELECT * FROM scheduled_messages WHERE sent = 0 ORDER BY scheduled_time ASC').all();
-      broadcast({ type: 'scheduled', data: allScheduled });
+      const all = db.prepare('SELECT * FROM scheduled_messages WHERE sent = 0 ORDER BY scheduled_time ASC').all();
+      broadcast({ type: 'scheduled', data: all });
       res.json({ success: true });
     } else {
       res.status(404).json({ error: 'Message not found' });
     }
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 
-app.delete('/api/scheduled/batch/:batchId', (req, res) => {
+app.delete('/api/scheduled/batch/:batchId', requireAuth, (req, res) => {
   try {
-    const stmt = db.prepare('DELETE FROM scheduled_messages WHERE batch_id = ? AND sent = 0');
-    stmt.run(req.params.batchId);
-    
-    const allScheduled = db.prepare('SELECT * FROM scheduled_messages WHERE sent = 0 ORDER BY scheduled_time ASC').all();
-    broadcast({ type: 'scheduled', data: allScheduled });
-    
+    db.prepare('DELETE FROM scheduled_messages WHERE batch_id = ? AND sent = 0').run(req.params.batchId);
+    const all = db.prepare('SELECT * FROM scheduled_messages WHERE sent = 0 ORDER BY scheduled_time ASC').all();
+    broadcast({ type: 'scheduled', data: all });
     res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 
-// Cron job - every 5 seconds for precise timing
+// ─── Cron: Send Messages ──────────────────────────────────────────────────────
 cron.schedule('*/5 * * * * *', async () => {
   if (!isReady) return;
 
-  const now = new Date();
-  const stmt = db.prepare('SELECT * FROM scheduled_messages WHERE sent = 0 AND datetime(scheduled_time) <= datetime(?)');
-  const messagesToSend = stmt.all(now.toISOString());
+  const msgs = db.prepare(
+    'SELECT * FROM scheduled_messages WHERE sent = 0 AND datetime(scheduled_time) <= datetime(?)'
+  ).all(new Date().toISOString());
 
-  for (const msg of messagesToSend) {
+  for (const msg of msgs) {
     try {
       let chatId = msg.phone_number;
-      if (!chatId.includes('@')) {
-        chatId = chatId.replace(/[^0-9]/g, '') + '@c.us';
+      if (!chatId.includes('@')) chatId = chatId.replace(/[^0-9]/g, '') + '@c.us';
+
+      if (msg.file_path && fs.existsSync(msg.file_path)) {
+        const media = MessageMedia.fromFilePath(msg.file_path);
+        await client.sendMessage(chatId, media, { caption: msg.message || undefined });
+      } else {
+        await client.sendMessage(chatId, msg.message);
       }
 
-      await client.sendMessage(chatId, msg.message);
-      
-      const updateStmt = db.prepare('UPDATE scheduled_messages SET sent = 1 WHERE id = ?');
-      updateStmt.run(msg.id);
-      
-      console.log(`Sent message ${msg.id}`);
-      
-      const allScheduled = db.prepare('SELECT * FROM scheduled_messages WHERE sent = 0 ORDER BY scheduled_time ASC').all();
-      broadcast({ type: 'scheduled', data: allScheduled });
-      
-      await new Promise(resolve => setTimeout(resolve, 500));
-    } catch (error) {
-      console.error(`Failed to send message ${msg.id}:`, error.message);
+      db.prepare('UPDATE scheduled_messages SET sent = 1 WHERE id = ?').run(msg.id);
+      console.log(`Sent message ${msg.id} to ${chatId}`);
+
+      const all = db.prepare('SELECT * FROM scheduled_messages WHERE sent = 0 ORDER BY scheduled_time ASC').all();
+      broadcast({ type: 'scheduled', data: all });
+
+      await new Promise(r => setTimeout(r, 500));
+    } catch (e) {
+      console.error(`Failed to send message ${msg.id}:`, e.message);
     }
   }
 });
 
-// Graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('SIGTERM received, closing gracefully...');
-  server.close(() => {
-    if (client) client.destroy();
-    db.close();
-    process.exit(0);
+// ─── Graceful Shutdown ────────────────────────────────────────────────────────
+['SIGTERM', 'SIGINT'].forEach(signal => {
+  process.on(signal, () => {
+    console.log(`${signal} received, shutting down...`);
+    server.close(() => {
+      if (client) client.destroy();
+      db.close();
+      process.exit(0);
+    });
   });
 });
 
-process.on('SIGINT', () => {
-  console.log('SIGINT received, closing gracefully...');
-  server.close(() => {
-    if (client) client.destroy();
-    db.close();
-    process.exit(0);
-  });
-});
-
+// ─── Start ────────────────────────────────────────────────────────────────────
 server.listen(PORT, '0.0.0.0', () => {
-  // Get actual network interfaces
-  const os = require('os');
-  const networkInterfaces = os.networkInterfaces();
-  
-  // Find first non-internal IPv4 address
-  let ipAddress = '0.0.0.0';
-  for (const interfaceName in networkInterfaces) {
-    for (const net of networkInterfaces[interfaceName]) {
-      // Skip internal (loopback) and IPv6 addresses
-      if (net.family === 'IPv4' && !net.internal) {
-        ipAddress = net.address;
-        break;
-      }
+  const nets = os.networkInterfaces();
+  let ip = '0.0.0.0';
+  for (const iface of Object.values(nets)) {
+    for (const net of iface) {
+      if (net.family === 'IPv4' && !net.internal) { ip = net.address; break; }
     }
-    if (ipAddress !== '0.0.0.0') break;
+    if (ip !== '0.0.0.0') break;
   }
-  
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('WhatsScheduler');
-  console.log(`Server: http://${ipAddress}:${PORT}`);
+  console.log(`Server: http://${ip}:${PORT}`);
   console.log(`Data: ${DATA_DIR}`);
+  console.log(`Auth: ${AUTH_ENABLED ? `Enabled (password ${APP_PASSWORD ? 'set' : '⚠ NOT SET — any password accepted'})` : 'Disabled'}`);
   console.log(`Docker: ${process.env.PUPPETEER_EXECUTABLE_PATH ? 'Yes' : 'No'}`);
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
   initializeWhatsAppClient();
